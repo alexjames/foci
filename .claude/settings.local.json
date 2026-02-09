@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"c:\\\\Users\\\\darkm\\\\Software\\\\foci\" log --oneline -5)",
+      "WebFetch(domain:docs.expo.dev)",
+      "Bash(npx create-expo-app@latest:*)",
+      "Bash(xcopy:*)"
+    ]
+  }
+}
