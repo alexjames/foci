@@ -6,12 +6,15 @@ import {
   Alert,
   useColorScheme,
   ScrollView,
+  Share,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Text, View } from '@/components/Themed';
 import { TimePicker } from '@/src/components/TimePicker';
 import { useSettings } from '@/src/hooks/useSettings';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
+import { STORAGE_KEYS } from '@/src/types';
 import {
   scheduleDailyNotification,
   cancelAllNotifications,
@@ -19,7 +22,7 @@ import {
 } from '@/src/utils/notifications';
 
 export default function SettingsScreen() {
-  const { settings, updateSettings, resetOnboarding } = useSettings();
+  const { settings, updateSettings, resetApp } = useSettings();
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -58,10 +61,25 @@ export default function SettingsScreen() {
     return `${displayHour}:${displayMinute} ${period}`;
   };
 
+  const handleExport = async () => {
+    try {
+      const keys = Object.values(STORAGE_KEYS);
+      const pairs = await AsyncStorage.multiGet(keys);
+      const data: Record<string, unknown> = {};
+      for (const [key, value] of pairs) {
+        if (value) data[key] = JSON.parse(value);
+      }
+      const json = JSON.stringify(data, null, 2);
+      await Share.share({ message: json, title: 'Foci Data Export' });
+    } catch (e) {
+      Alert.alert('Export Failed', 'Unable to export data.');
+    }
+  };
+
   const handleReset = () => {
     Alert.alert(
       'Reset App',
-      'This will clear all your goals and restart onboarding. Are you sure?',
+      'This will clear all your data and restart the app. Are you sure?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -69,7 +87,7 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             await cancelAllNotifications();
-            resetOnboarding();
+            await resetApp();
           },
         },
       ]
@@ -127,51 +145,6 @@ export default function SettingsScreen() {
       </View>
 
       <Text style={[styles.sectionHeader, { color: colors.secondaryText }]}>
-        MEMENTO MORI
-      </Text>
-      <View
-        style={[
-          styles.section,
-          { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
-        ]}
-      >
-        <View style={[styles.row, { backgroundColor: 'transparent' }]}>
-          <Text style={[styles.rowLabel, { color: colors.text }]}>
-            Life Expectancy
-          </Text>
-          <View style={styles.stepperContainer}>
-            <Pressable
-              onPress={() => {
-                const current = settings.lifeExpectancy ?? 80;
-                if (current > 1) updateSettings({ lifeExpectancy: current - 1 });
-              }}
-              style={({ pressed }) => [
-                styles.stepperButton,
-                { backgroundColor: colors.tint, opacity: pressed ? 0.7 : 1 },
-              ]}
-            >
-              <Text style={styles.stepperText}>-</Text>
-            </Pressable>
-            <Text style={[styles.stepperValue, { color: colors.text }]}>
-              {settings.lifeExpectancy ?? 80}
-            </Text>
-            <Pressable
-              onPress={() => {
-                const current = settings.lifeExpectancy ?? 80;
-                if (current < 150) updateSettings({ lifeExpectancy: current + 1 });
-              }}
-              style={({ pressed }) => [
-                styles.stepperButton,
-                { backgroundColor: colors.tint, opacity: pressed ? 0.7 : 1 },
-              ]}
-            >
-              <Text style={styles.stepperText}>+</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-
-      <Text style={[styles.sectionHeader, { color: colors.secondaryText }]}>
         DATA
       </Text>
       <View
@@ -180,6 +153,17 @@ export default function SettingsScreen() {
           { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
         ]}
       >
+        <Pressable
+          onPress={handleExport}
+          style={[styles.row, { backgroundColor: 'transparent' }]}
+        >
+          <Text style={[styles.rowLabel, { color: colors.tint }]}>
+            Export Data
+          </Text>
+        </Pressable>
+        <View
+          style={[styles.separator, { backgroundColor: colors.separator }]}
+        />
         <Pressable
           onPress={handleReset}
           style={[styles.row, { backgroundColor: 'transparent' }]}
@@ -204,7 +188,7 @@ export default function SettingsScreen() {
             Version
           </Text>
           <Text style={[styles.rowValue, { color: colors.secondaryText }]}>
-            1.0.0
+            2.0.0
           </Text>
         </View>
       </View>
@@ -248,30 +232,5 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     marginLeft: Layout.spacing.md,
-  },
-  stepperContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Layout.spacing.md,
-  },
-  stepperButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperText: {
-    color: '#FFFFFF',
-    fontSize: Layout.fontSize.title,
-    fontWeight: '600',
-    lineHeight: Layout.fontSize.title,
-  },
-  stepperValue: {
-    fontSize: Layout.fontSize.body,
-    fontWeight: '600',
-    fontVariant: ['tabular-nums'],
-    minWidth: 32,
-    textAlign: 'center',
   },
 });

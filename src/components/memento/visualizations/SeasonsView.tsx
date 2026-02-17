@@ -16,7 +16,6 @@ interface SeasonConfig {
   key: Season;
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
-  ageRange: string;
   percentRange: [number, number];
   color: { light: string; dark: string };
 }
@@ -26,7 +25,6 @@ const SEASONS: SeasonConfig[] = [
     key: 'spring',
     label: 'Spring',
     icon: 'leaf',
-    ageRange: '0–20 years',
     percentRange: [0, 25],
     color: { light: '#34C759', dark: '#30D158' },
   },
@@ -34,7 +32,6 @@ const SEASONS: SeasonConfig[] = [
     key: 'summer',
     label: 'Summer',
     icon: 'sunny',
-    ageRange: '20–40 years',
     percentRange: [25, 50],
     color: { light: '#FF9500', dark: '#FF9F0A' },
   },
@@ -42,7 +39,6 @@ const SEASONS: SeasonConfig[] = [
     key: 'autumn',
     label: 'Autumn',
     icon: 'cloudy',
-    ageRange: '40–60 years',
     percentRange: [50, 75],
     color: { light: '#FF6B35', dark: '#FF6F61' },
   },
@@ -50,7 +46,6 @@ const SEASONS: SeasonConfig[] = [
     key: 'winter',
     label: 'Winter',
     icon: 'snow',
-    ageRange: '60–80 years',
     percentRange: [75, 100],
     color: { light: '#8E8E93', dark: '#98989D' },
   },
@@ -73,6 +68,9 @@ export function SeasonsView({ lifeData }: SeasonsViewProps) {
           const isPast = percent >= season.percentRange[1];
           const isFuture = percent < season.percentRange[0];
           const seasonColor = season.color[colorScheme];
+          const ageStart = Math.ceil(lifeData.lifeExpectancy * season.percentRange[0] / 100);
+          const ageEnd = Math.ceil(lifeData.lifeExpectancy * season.percentRange[1] / 100);
+          const ageRange = `${ageStart}–${ageEnd} years`;
 
           let seasonProgress = 0;
           if (isPast) {
@@ -104,7 +102,7 @@ export function SeasonsView({ lifeData }: SeasonsViewProps) {
                 {season.label}
               </Text>
               <Text style={[styles.ageRange, { color: colors.secondaryText }]}>
-                {season.ageRange}
+                {ageRange}
               </Text>
 
               {(isCurrent || isPast) && (

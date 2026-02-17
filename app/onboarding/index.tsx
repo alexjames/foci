@@ -1,15 +1,15 @@
 import React from 'react';
 import { StyleSheet, Pressable, useColorScheme } from 'react-native';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, View } from '@/components/Themed';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
+import { useSettings } from '@/src/hooks/useSettings';
 
 export default function OnboardingWelcome() {
-  const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
+  const { completeOnboarding } = useSettings();
 
   return (
     <SafeAreaView
@@ -22,13 +22,14 @@ export default function OnboardingWelcome() {
             Focus on what matters
           </Text>
           <Text style={[styles.description, { color: colors.secondaryText }]}>
-            Track up to 5 goals and review them daily. Stay focused, stay
-            committed.
+            Build your personal toolkit for intentional living. Add tools like
+            goal tracking, memento mori, affirmations, and breathing exercises
+            to your home screen.
           </Text>
         </View>
         <View style={styles.footer}>
           <Pressable
-            onPress={() => router.push('/onboarding/goals')}
+            onPress={completeOnboarding}
             style={({ pressed }) => [
               styles.button,
               { opacity: pressed ? 0.8 : 1 },
@@ -72,7 +73,7 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.body,
     textAlign: 'center',
     lineHeight: 24,
-    maxWidth: 280,
+    maxWidth: 300,
   },
   footer: {
     backgroundColor: 'transparent',

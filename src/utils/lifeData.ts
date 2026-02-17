@@ -106,35 +106,28 @@ export function calculateLifeData(birthday: Date, lifeExpectancy: number): LifeD
 }
 
 export function getTimeRemaining(deathDate: Date): {
-  years: number;
-  months: number;
   days: number;
   hours: number;
   minutes: number;
   seconds: number;
+  milliseconds: number;
 } {
   const now = new Date();
 
   if (now >= deathDate) {
-    return { years: 0, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0 };
+    return { days: 0, hours: 0, minutes: 0, seconds: 0, milliseconds: 0 };
   }
 
-  let years = deathDate.getFullYear() - now.getFullYear();
-  let months = deathDate.getMonth() - now.getMonth();
-  let days = deathDate.getDate() - now.getDate();
-  let hours = deathDate.getHours() - now.getHours();
-  let minutes = deathDate.getMinutes() - now.getMinutes();
-  let seconds = deathDate.getSeconds() - now.getSeconds();
+  let remaining = deathDate.getTime() - now.getTime();
 
-  if (seconds < 0) { seconds += 60; minutes--; }
-  if (minutes < 0) { minutes += 60; hours--; }
-  if (hours < 0) { hours += 24; days--; }
-  if (days < 0) {
-    const prevMonth = new Date(deathDate.getFullYear(), deathDate.getMonth(), 0);
-    days += prevMonth.getDate();
-    months--;
-  }
-  if (months < 0) { months += 12; years--; }
+  const days = Math.floor(remaining / MS_PER_DAY);
+  remaining %= MS_PER_DAY;
+  const hours = Math.floor(remaining / (1000 * 60 * 60));
+  remaining %= 1000 * 60 * 60;
+  const minutes = Math.floor(remaining / (1000 * 60));
+  remaining %= 1000 * 60;
+  const seconds = Math.floor(remaining / 1000);
+  const milliseconds = remaining % 1000;
 
-  return { years, months, days, hours, minutes, seconds };
+  return { days, hours, minutes, seconds, milliseconds };
 }

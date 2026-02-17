@@ -4,7 +4,9 @@
       "Bash(git -C \"c:\\\\Users\\\\darkm\\\\Software\\\\foci\" log --oneline -5)",
       "WebFetch(domain:docs.expo.dev)",
       "Bash(npx create-expo-app@latest:*)",
-      "Bash(xcopy:*)"
+      "Bash(xcopy:*)",
+      "Bash(git -C /c/Users/darkm/Software/foci show HEAD:\"app/\\(tabs\\)/goals.tsx\")",
+      "Bash(git -C /c/Users/darkm/Software/foci show HEAD:\"app/\\(tabs\\)/index.tsx\")"
     ]
   }
 }

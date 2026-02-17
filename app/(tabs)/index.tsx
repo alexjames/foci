@@ -1,58 +1,55 @@
-import { StyleSheet, ScrollView, Pressable, useColorScheme } from 'react-native';
+import React, { useCallback } from 'react';
+import { StyleSheet, View, TouchableOpacity, useColorScheme } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Text, View } from '@/components/Themed';
-import { GoalCard } from '@/src/components/GoalCard';
-import { EmptyState } from '@/src/components/EmptyState';
-import { useGoals } from '@/src/hooks/useGoals';
+import DraggableFlatList, {
+  RenderItemParams,
+  ScaleDecorator,
+} from 'react-native-draggable-flatlist';
 import { Colors } from '@/src/constants/Colors';
-import { Layout } from '@/src/constants/Layout';
+import { HomeToolEntry } from '@/src/types';
+import { useTools } from '@/src/hooks/useTools';
+import { HomeToolCard } from '@/src/components/home/HomeToolCard';
+import { HomeEmptyState } from '@/src/components/home/HomeEmptyState';
 
 export default function HomeScreen() {
-  const router = useRouter();
-  const { goals } = useGoals();
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
+  const router = useRouter();
+  const { homeTools, reorderHomeTools } = useTools();
 
-  const handleGoalPress = (id: string) => {
-    router.push(`/edit-goal/${id}`);
-  };
+  const renderItem = useCallback(
+    ({ item, drag, isActive }: RenderItemParams<HomeToolEntry>) => (
+      <ScaleDecorator>
+        <TouchableOpacity
+          onLongPress={drag}
+          onPress={() => router.push(`/tool/${item.toolId}` as any)}
+          activeOpacity={0.7}
+          disabled={isActive}
+        >
+          <HomeToolCard toolId={item.toolId} drag={drag} isActive={isActive} />
+        </TouchableOpacity>
+      </ScaleDecorator>
+    ),
+    [router]
+  );
 
-  const handleReviewGoals = () => {
-    router.push('/reveal');
-  };
-
-  if (goals.length === 0) {
+  if (homeTools.length === 0) {
     return (
-      <View style={styles.container}>
-        <EmptyState
-          title="No Goals Yet"
-          message="Head over to the Goals tab to add your first goal."
-        />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <HomeEmptyState />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {goals.map((goal) => (
-          <GoalCard key={goal.id} goal={goal} onPress={handleGoalPress} />
-        ))}
-      </ScrollView>
-      <View style={styles.buttonContainer}>
-        <Pressable
-          onPress={handleReviewGoals}
-          style={({ pressed }) => [
-            styles.reviewButton,
-            { opacity: pressed ? 0.8 : 1 },
-          ]}
-        >
-          <Text style={styles.reviewButtonText}>Review Goals</Text>
-        </Pressable>
-      </View>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <DraggableFlatList
+        data={homeTools}
+        onDragEnd={({ data }) => reorderHomeTools(data)}
+        keyExtractor={(item) => item.toolId}
+        renderItem={renderItem}
+        contentContainerStyle={styles.list}
+      />
     </View>
   );
 }
@@ -61,31 +58,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: Layout.spacing.md,
-    paddingBottom: 100,
-  },
-  buttonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: Layout.spacing.md,
-    paddingBottom: Layout.spacing.lg,
-    backgroundColor: 'transparent',
-  },
-  reviewButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: Layout.borderRadius.md,
-    padding: Layout.spacing.md,
-    alignItems: 'center',
-  },
-  reviewButtonText: {
-    color: '#FFFFFF',
-    fontSize: Layout.fontSize.body,
-    fontWeight: '600',
+  list: {
+    paddingVertical: 16,
   },
 });

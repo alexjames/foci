@@ -3,6 +3,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useColorScheme } from '@/components/useColorScheme';
 import { AppProvider, useAppContext } from '@/src/context/AppContext';
 import { useNotificationListener } from '@/src/hooks/useNotifications';
@@ -58,6 +59,27 @@ function RootNavigator() {
             presentation: 'modal',
           }}
         />
+        <Stack.Screen
+          name="tool/[toolId]"
+          options={{
+            headerShown: false,
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
+          name="tool-config/[toolId]"
+          options={{
+            headerShown: false,
+            presentation: 'modal',
+          }}
+        />
+        <Stack.Screen
+          name="edit-checklist/[id]"
+          options={{
+            headerShown: false,
+            presentation: 'modal',
+          }}
+        />
         <Stack.Screen name="+not-found" />
       </Stack>
     </ThemeProvider>
@@ -82,8 +104,10 @@ export default function RootLayout() {
   if (!loaded) return null;
 
   return (
-    <AppProvider>
-      <RootNavigator />
-    </AppProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AppProvider>
+        <RootNavigator />
+      </AppProvider>
+    </GestureHandlerRootView>
   );
 }

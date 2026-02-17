@@ -22,20 +22,19 @@ export function CountdownTimer({ birthday, lifeExpectancy }: CountdownTimerProps
   useEffect(() => {
     const interval = setInterval(() => {
       setRemaining(getTimeRemaining(deathDate));
-    }, 1000);
+    }, 50);
     return () => clearInterval(interval);
   }, [deathDate.getTime()]);
 
   const units = [
-    { value: remaining.years, label: 'years' },
-    { value: remaining.months, label: 'months' },
-    { value: remaining.days, label: 'days' },
-    { value: remaining.hours, label: 'hrs' },
-    { value: remaining.minutes, label: 'min' },
-    { value: remaining.seconds, label: 'sec' },
+    { value: String(remaining.days), label: 'days' },
+    { value: String(remaining.hours).padStart(2, '0'), label: 'hrs' },
+    { value: String(remaining.minutes).padStart(2, '0'), label: 'min' },
+    { value: String(remaining.seconds).padStart(2, '0'), label: 'sec' },
+    { value: String(Math.floor(remaining.milliseconds / 10)).padStart(2, '0'), label: 'ms' },
   ];
 
-  const allZero = units.every((u) => u.value === 0);
+  const allZero = remaining.days === 0 && remaining.hours === 0 && remaining.minutes === 0 && remaining.seconds === 0 && remaining.milliseconds === 0;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
@@ -46,7 +45,7 @@ export function CountdownTimer({ birthday, lifeExpectancy }: CountdownTimerProps
           {units.map((unit) => (
             <View key={unit.label} style={styles.unit}>
               <Text style={[styles.value, { color: colors.text }]}>
-                {String(unit.value).padStart(2, '0')}
+                {unit.value}
               </Text>
               <Text style={[styles.label, { color: colors.secondaryText }]}>
                 {unit.label}

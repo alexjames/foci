@@ -23,25 +23,25 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
+            <Ionicons name="home-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="goals"
+        name="checklist"
         options={{
-          title: 'Goals',
+          title: 'Checklist',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="flag" size={size} color={color} />
+            <Ionicons name="list-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="memento"
+        name="toolbox"
         options={{
-          title: 'Memento',
+          title: 'Toolbox',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="hourglass" size={size} color={color} />
+            <Ionicons name="apps-outline" size={size} color={color} />
           ),
         }}
       />
@@ -50,7 +50,7 @@ export default function TabLayout() {
         options={{
           title: 'Settings',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings" size={size} color={color} />
+            <Ionicons name="settings-outline" size={size} color={color} />
           ),
         }}
       />
