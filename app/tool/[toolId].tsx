@@ -118,48 +118,39 @@ function GoalsView() {
     ]);
   };
 
-  if (goals.length === 0) {
-    return (
-      <View style={{ flex: 1 }}>
-        <EmptyState title="No Goals Yet" message="Tap the + button to add your first goal." />
-        <View style={styles.fabContainer}>
-          <Pressable onPress={() => router.push('/edit-goal/new')} style={styles.fab}>
-            <Ionicons name="add" size={28} color="#fff" />
-          </Pressable>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={{ padding: Layout.spacing.md, paddingBottom: 100 }}>
-        {goals.map((goal) => (
-          <View key={goal.id} style={[styles.goalRow, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
-            <Pressable onPress={() => router.push(`/edit-goal/${goal.id}`)} style={styles.goalInfo}>
-              <Text style={[styles.goalName, { color: colors.text }]}>{goal.name}</Text>
-              {goal.outcome ? (
-                <Text style={[styles.goalSubtext, { color: colors.secondaryText }]} numberOfLines={1}>{goal.outcome}</Text>
-              ) : null}
-            </Pressable>
-            <Pressable onPress={() => handleDelete(goal.id, goal.name)} hitSlop={8} style={{ padding: Layout.spacing.xs }}>
-              <Ionicons name="trash-outline" size={20} color={colors.destructive} />
-            </Pressable>
-          </View>
-        ))}
+      <ScrollView contentContainerStyle={styles.goalsScrollContent}>
+        {goals.length === 0 ? (
+          <EmptyState title="No Goals Yet" message="Tap the + button to add your first goal." />
+        ) : (
+          goals.map((goal) => (
+            <View key={goal.id} style={[styles.goalRow, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
+              <Pressable onPress={() => router.push(`/edit-goal/${goal.id}`)} style={styles.goalInfo}>
+                <Text style={[styles.goalName, { color: colors.text }]}>{goal.name}</Text>
+                {goal.outcome ? (
+                  <Text style={[styles.goalSubtext, { color: colors.secondaryText }]} numberOfLines={1}>{goal.outcome}</Text>
+                ) : null}
+              </Pressable>
+              <Pressable onPress={() => handleDelete(goal.id, goal.name)} hitSlop={8} style={{ padding: Layout.spacing.xs }}>
+                <Ionicons name="trash-outline" size={20} color={colors.destructive} />
+              </Pressable>
+            </View>
+          ))
+        )}
       </ScrollView>
-      <View style={styles.bottomButtons}>
-        <Pressable onPress={() => router.push('/reveal')} style={[styles.reviewButton, { backgroundColor: colors.tint }]}>
-          <Text style={styles.reviewButtonText}>Review Goals</Text>
-        </Pressable>
-      </View>
-      {canAddGoal && (
-        <View style={styles.fabContainer}>
+      <View style={styles.bottomActions}>
+        {goals.length > 0 && (
+          <Pressable onPress={() => router.push('/reveal')} style={[styles.reviewButton, { backgroundColor: colors.tint }]}>
+            <Text style={styles.reviewButtonText}>Review Goals</Text>
+          </Pressable>
+        )}
+        {canAddGoal && (
           <Pressable onPress={() => router.push('/edit-goal/new')} style={styles.fab}>
             <Ionicons name="add" size={28} color="#fff" />
           </Pressable>
-        </View>
-      )}
+        )}
+      </View>
     </View>
   );
 }
@@ -230,10 +221,20 @@ const styles = StyleSheet.create({
   goalInfo: { flex: 1, marginRight: Layout.spacing.md },
   goalName: { fontSize: Layout.fontSize.body, fontWeight: '600' },
   goalSubtext: { fontSize: Layout.fontSize.caption, marginTop: 2 },
-  fabContainer: {
+  goalsScrollContent: {
+    padding: Layout.spacing.md,
+    paddingBottom: 200,
+    flexGrow: 1,
+  },
+  bottomActions: {
     position: 'absolute',
-    bottom: Layout.spacing.lg,
-    right: Layout.spacing.lg,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingBottom: Layout.spacing.xl,
+    paddingHorizontal: Layout.spacing.md,
+    gap: Layout.spacing.md,
   },
   fab: {
     backgroundColor: '#007AFF',
@@ -248,14 +249,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-  bottomButtons: {
-    position: 'absolute',
-    bottom: 80,
-    left: 0,
-    right: 0,
-    paddingHorizontal: Layout.spacing.md,
-  },
   reviewButton: {
+    alignSelf: 'stretch',
     borderRadius: Layout.borderRadius.md,
     padding: Layout.spacing.md,
     alignItems: 'center',
