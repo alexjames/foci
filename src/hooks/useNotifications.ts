@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
-import * as Notifications from 'expo-notifications';
+import type * as Notifications from 'expo-notifications';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const getNotifications = () => require('expo-notifications') as typeof import('expo-notifications');
 
 export function useNotificationListener() {
   const router = useRouter();
@@ -8,8 +11,9 @@ export function useNotificationListener() {
 
   // Handle notification tap when app is running
   useEffect(() => {
+    const N = getNotifications();
     responseListener.current =
-      Notifications.addNotificationResponseReceivedListener((response) => {
+      N.addNotificationResponseReceivedListener((response) => {
         const data = response.notification.request.content.data;
         if (data?.screen === 'reveal') {
           router.push('/reveal');
@@ -24,7 +28,7 @@ export function useNotificationListener() {
   }, [router]);
 
   // Handle notification tap that launched the app (cold start)
-  const lastResponse = Notifications.useLastNotificationResponse();
+  const lastResponse = getNotifications().useLastNotificationResponse();
   useEffect(() => {
     if (lastResponse?.notification.request.content.data?.screen === 'reveal') {
       router.push('/reveal');

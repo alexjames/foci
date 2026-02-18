@@ -1,15 +1,18 @@
-import * as Notifications from 'expo-notifications';
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+function getNotifications() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require('expo-notifications') as typeof import('expo-notifications');
+}
 
 export async function requestNotificationPermissions(): Promise<boolean> {
+  const Notifications = getNotifications();
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
   const { status: existing } = await Notifications.getPermissionsAsync();
   if (existing === 'granted') return true;
 
@@ -27,6 +30,7 @@ export async function scheduleDailyNotification(
   hour: number,
   minute: number
 ): Promise<string> {
+  const Notifications = getNotifications();
   await Notifications.cancelAllScheduledNotificationsAsync();
 
   const id = await Notifications.scheduleNotificationAsync({
@@ -46,5 +50,6 @@ export async function scheduleDailyNotification(
 }
 
 export async function cancelAllNotifications(): Promise<void> {
+  const Notifications = getNotifications();
   await Notifications.cancelAllScheduledNotificationsAsync();
 }

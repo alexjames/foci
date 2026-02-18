@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, Pressable, Animated, useColorScheme } from 'react-native';
+import { StyleSheet, Pressable, Animated, useColorScheme, Platform } from 'react-native';
 import DateTimePicker, {
   DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
@@ -31,7 +31,15 @@ export function BirthdayPrompt({ onComplete, lifeExpectancy }: BirthdayPromptPro
     }).start();
   }, [opacity]);
 
-  const handleDateChange = (_event: DateTimePickerEvent, date?: Date) => {
+  const handleDateChange = async (event: DateTimePickerEvent, date?: Date) => {
+    if (Platform.OS === 'android') {
+      if (event.type === 'set' && date) {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        onComplete(date);
+      }
+      // dismissed — do nothing
+      return;
+    }
     if (date) setSelectedDate(date);
   };
 
@@ -52,22 +60,24 @@ export function BirthdayPrompt({ onComplete, lifeExpectancy }: BirthdayPromptPro
         <DateTimePicker
           value={selectedDate}
           mode="date"
-          display="spinner"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
           maximumDate={new Date()}
           minimumDate={new Date(1920, 0, 1)}
           onChange={handleDateChange}
         />
       </View>
 
-      <Pressable
-        onPress={handleConfirm}
-        style={({ pressed }) => [
-          styles.button,
-          { opacity: pressed ? 0.8 : 1 },
-        ]}
-      >
-        <Text style={styles.buttonText}>Continue</Text>
-      </Pressable>
+      {Platform.OS === 'ios' && (
+        <Pressable
+          onPress={handleConfirm}
+          style={({ pressed }) => [
+            styles.button,
+            { opacity: pressed ? 0.8 : 1 },
+          ]}
+        >
+          <Text style={styles.buttonText}>Continue</Text>
+        </Pressable>
+      )}
     </Animated.View>
   );
 }
