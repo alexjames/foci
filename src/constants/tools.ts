@@ -49,6 +49,22 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     description:
       'Track up to 10 deadlines with color-coded cards. Set reminders so nothing slips through the cracks.',
   },
+  {
+    id: 'morning-routine',
+    name: 'Morning Routine',
+    tagline: 'Start your day with intention',
+    icon: 'sunny-outline',
+    description:
+      'Build your ideal morning routine from preset and custom cards. Play through them step by step each morning.',
+  },
+  {
+    id: 'evening-routine',
+    name: 'Evening Routine',
+    tagline: 'End your day mindfully',
+    icon: 'moon-outline',
+    description:
+      'Wind down with a guided evening routine. Customize your steps and play through them each night.',
+  },
 ];
 
 export const FOCUS_TIMER_PRESETS = [

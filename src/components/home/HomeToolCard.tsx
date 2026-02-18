@@ -10,6 +10,7 @@ import {
   BreathingConfig,
   FocusTimerConfig,
   DeadlineTrackerConfig,
+  RoutineConfig,
 } from '@/src/types';
 import { TOOL_REGISTRY, BREATHING_PRESETS, FOCUS_TIMER_PRESETS } from '@/src/constants/tools';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
@@ -140,6 +141,27 @@ function DeadlineTrackerPreview() {
   );
 }
 
+function RoutinePreview({ toolId }: { toolId: 'morning-routine' | 'evening-routine' }) {
+  const { config } = useToolConfig<RoutineConfig>(toolId);
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+  const cardCount = config?.orderedCards?.length ?? 0;
+
+  if (cardCount === 0) {
+    return (
+      <Text style={[styles.previewText, { color: colors.secondaryText }]}>
+        Tap to build your routine
+      </Text>
+    );
+  }
+
+  return (
+    <Text style={[styles.previewText, { color: colors.secondaryText }]}>
+      {cardCount} step{cardCount !== 1 ? 's' : ''} in your routine
+    </Text>
+  );
+}
+
 export function HomeToolCard({ toolId, drag, isActive }: HomeToolCardProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
@@ -155,6 +177,8 @@ export function HomeToolCard({ toolId, drag, isActive }: HomeToolCardProps) {
       case 'breathing': return <BreathingPreview />;
       case 'focus-timer': return <FocusTimerPreview />;
       case 'deadline-tracker': return <DeadlineTrackerPreview />;
+      case 'morning-routine': return <RoutinePreview toolId="morning-routine" />;
+      case 'evening-routine': return <RoutinePreview toolId="evening-routine" />;
     }
   };
 

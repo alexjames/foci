@@ -53,6 +53,10 @@ import { AffirmationsList } from '@/src/components/affirmations/AffirmationsList
 // Deadline Tracker imports
 import { DeadlineTrackerList } from '@/src/components/deadline-tracker/DeadlineTrackerList';
 
+// Routine imports
+import { RoutineCardList } from '@/src/components/routine/RoutineCardList';
+import { RoutinePlayView } from '@/src/components/routine/RoutinePlayView';
+
 function MementoView() {
   const { config, setConfig } = useToolConfig<MementoMoriConfig>('memento-mori');
   const [activeView, setActiveView] = useState<VisualizationType>('hourglass');
@@ -187,6 +191,15 @@ function DeadlineTrackerView() {
   return <DeadlineTrackerList />;
 }
 
+function RoutineView({ toolId }: { toolId: 'morning-routine' | 'evening-routine' }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  if (isPlaying) {
+    return <RoutinePlayView toolId={toolId} onComplete={() => setIsPlaying(false)} />;
+  }
+  return <RoutineCardList toolId={toolId} onPlay={() => setIsPlaying(true)} />;
+}
+
 export default function ToolScreen() {
   const { toolId } = useLocalSearchParams<{ toolId: string }>();
   const router = useRouter();
@@ -202,6 +215,8 @@ export default function ToolScreen() {
       case 'breathing': return <BreathingView />;
       case 'focus-timer': return <FocusTimerView />;
       case 'deadline-tracker': return <DeadlineTrackerView />;
+      case 'morning-routine': return <RoutineView toolId="morning-routine" />;
+      case 'evening-routine': return <RoutineView toolId="evening-routine" />;
       default: return <Text style={{ color: colors.text }}>Unknown tool</Text>;
     }
   };

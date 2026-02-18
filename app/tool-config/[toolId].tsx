@@ -57,6 +57,20 @@ function getDefaultConfig(toolId: ToolId): ToolConfig {
         deadlines: [],
         notificationEnabled: false,
       };
+    case 'morning-routine':
+      return {
+        toolId: 'morning-routine',
+        orderedCards: [],
+        customCards: [],
+        notificationEnabled: false,
+      };
+    case 'evening-routine':
+      return {
+        toolId: 'evening-routine',
+        orderedCards: [],
+        customCards: [],
+        notificationEnabled: false,
+      };
   }
 }
 
