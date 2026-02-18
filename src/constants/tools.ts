@@ -50,6 +50,14 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
       'Track up to 10 deadlines with color-coded cards. Set reminders so nothing slips through the cracks.',
   },
   {
+    id: 'streak-tracker',
+    name: 'Streak Tracker',
+    tagline: 'Keep the fire burning',
+    icon: 'flame-outline',
+    description:
+      'Track your daily streaks and build consistency. See how many days you\'ve kept each habit alive.',
+  },
+  {
     id: 'morning-routine',
     name: 'Morning Routine',
     tagline: 'Start your day with intention',

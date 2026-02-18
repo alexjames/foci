@@ -11,6 +11,7 @@ import {
   FocusTimerConfig,
   DeadlineTrackerConfig,
   RoutineConfig,
+  StreakTrackerConfig,
 } from '@/src/types';
 import { TOOL_REGISTRY, BREATHING_PRESETS, FOCUS_TIMER_PRESETS } from '@/src/constants/tools';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
@@ -141,6 +142,39 @@ function DeadlineTrackerPreview() {
   );
 }
 
+function StreakTrackerPreview() {
+  const { config } = useToolConfig<StreakTrackerConfig>('streak-tracker');
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+  const streaks = config?.streaks ?? [];
+
+  if (streaks.length === 0) {
+    return (
+      <Text style={[styles.previewText, { color: colors.secondaryText }]}>
+        Tap to start tracking streaks
+      </Text>
+    );
+  }
+
+  const sorted = [...streaks].sort((a, b) => {
+    const aDays = Math.max(0, Math.round((Date.now() - new Date(a.startDate).getTime()) / (1000 * 60 * 60 * 24)));
+    const bDays = Math.max(0, Math.round((Date.now() - new Date(b.startDate).getTime()) / (1000 * 60 * 60 * 24)));
+    return bDays - aDays;
+  });
+  const top = sorted[0];
+  const now = new Date();
+  const start = new Date(top.startDate);
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const days = Math.max(0, Math.round((todayStart.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24)));
+
+  return (
+    <Text style={[styles.previewText, { color: colors.secondaryText }]}>
+      {streaks.length} streak{streaks.length !== 1 ? 's' : ''} · Best: {top.title} ({days} day{days !== 1 ? 's' : ''})
+    </Text>
+  );
+}
+
 function RoutinePreview({ toolId }: { toolId: 'morning-routine' | 'evening-routine' }) {
   const { config } = useToolConfig<RoutineConfig>(toolId);
   const colorScheme = useColorScheme() ?? 'light';
@@ -177,6 +211,7 @@ export function HomeToolCard({ toolId, drag, isActive }: HomeToolCardProps) {
       case 'breathing': return <BreathingPreview />;
       case 'focus-timer': return <FocusTimerPreview />;
       case 'deadline-tracker': return <DeadlineTrackerPreview />;
+      case 'streak-tracker': return <StreakTrackerPreview />;
       case 'morning-routine': return <RoutinePreview toolId="morning-routine" />;
       case 'evening-routine': return <RoutinePreview toolId="evening-routine" />;
     }

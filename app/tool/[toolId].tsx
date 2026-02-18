@@ -53,6 +53,9 @@ import { AffirmationsList } from '@/src/components/affirmations/AffirmationsList
 // Deadline Tracker imports
 import { DeadlineTrackerList } from '@/src/components/deadline-tracker/DeadlineTrackerList';
 
+// Streak Tracker imports
+import { StreakTrackerList } from '@/src/components/streak-tracker/StreakTrackerList';
+
 // Routine imports
 import { RoutineCardList } from '@/src/components/routine/RoutineCardList';
 import { RoutinePlayView } from '@/src/components/routine/RoutinePlayView';
@@ -191,6 +194,10 @@ function DeadlineTrackerView() {
   return <DeadlineTrackerList />;
 }
 
+function StreakTrackerView() {
+  return <StreakTrackerList />;
+}
+
 function RoutineView({ toolId }: { toolId: 'morning-routine' | 'evening-routine' }) {
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -215,6 +222,7 @@ export default function ToolScreen() {
       case 'breathing': return <BreathingView />;
       case 'focus-timer': return <FocusTimerView />;
       case 'deadline-tracker': return <DeadlineTrackerView />;
+      case 'streak-tracker': return <StreakTrackerView />;
       case 'morning-routine': return <RoutineView toolId="morning-routine" />;
       case 'evening-routine': return <RoutineView toolId="evening-routine" />;
       default: return <Text style={{ color: colors.text }}>Unknown tool</Text>;

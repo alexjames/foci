@@ -57,6 +57,12 @@ function getDefaultConfig(toolId: ToolId): ToolConfig {
         deadlines: [],
         notificationEnabled: false,
       };
+    case 'streak-tracker':
+      return {
+        toolId: 'streak-tracker',
+        streaks: [],
+        notificationEnabled: false,
+      };
     case 'morning-routine':
       return {
         toolId: 'morning-routine',
