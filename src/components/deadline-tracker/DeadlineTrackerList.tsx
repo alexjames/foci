@@ -40,12 +40,16 @@ function formatDeadlineDate(dateStr: string): string {
   return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
-function getDaysLabel(days: number): string {
-  if (days === 0) return 'Today';
-  if (days === 1) return '1 day left';
-  if (days > 1) return `${days} days left`;
-  if (days === -1) return '1 day ago';
-  return `${Math.abs(days)} days ago`;
+function getDaysNumber(days: number): string {
+  return Math.abs(days).toString();
+}
+
+function getDaysSubLabel(days: number): string {
+  if (days === 0) return 'today';
+  if (days === 1) return 'day left';
+  if (days > 1) return 'days left';
+  if (days === -1) return 'day ago';
+  return 'days ago';
 }
 
 function RightAction() {
@@ -126,14 +130,13 @@ function SwipeableDeadlineCard({
             {formatDeadlineDate(deadline.date)}
           </Text>
         </View>
+        <View style={[styles.divider, { backgroundColor: colors.cardBorder }]} />
         <View style={styles.cardRight}>
-          <Text
-            style={[
-              styles.daysText,
-              { color: isPast ? colors.destructive : accentColor },
-            ]}
-          >
-            {getDaysLabel(daysUntil)}
+          <Text style={[styles.daysNumber, { color: isPast ? colors.destructive : accentColor }]}>
+            {daysUntil === 0 ? '0' : getDaysNumber(daysUntil)}
+          </Text>
+          <Text style={[styles.daysSubLabel, { color: isPast ? colors.destructive : accentColor }]}>
+            {getDaysSubLabel(daysUntil)}
           </Text>
         </View>
       </Pressable>
@@ -297,11 +300,20 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.caption,
     marginTop: 2,
   },
-  cardRight: {
-    marginLeft: Layout.spacing.md,
-    alignItems: 'flex-end',
+  divider: {
+    width: 1,
+    alignSelf: 'stretch',
+    marginHorizontal: Layout.spacing.md,
   },
-  daysText: {
+  cardRight: {
+    alignItems: 'center',
+  },
+  daysNumber: {
+    fontSize: Layout.fontSize.title,
+    fontWeight: '700',
+    lineHeight: 24,
+  },
+  daysSubLabel: {
     fontSize: Layout.fontSize.caption,
     fontWeight: '600',
   },
