@@ -51,8 +51,10 @@ function getDaysLabel(days: number): string {
 function RightAction() {
   return (
     <View style={styles.swipeActionRight}>
-      <Ionicons name="trash-outline" size={22} color="#fff" />
-      <Text style={styles.swipeText}>Delete</Text>
+      <View style={styles.swipeActionContent}>
+        <Ionicons name="trash-outline" size={22} color="#fff" />
+        <Text style={styles.swipeText}>Delete</Text>
+      </View>
     </View>
   );
 }
@@ -60,8 +62,10 @@ function RightAction() {
 function LeftAction() {
   return (
     <View style={styles.swipeActionLeft}>
-      <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />
-      <Text style={styles.swipeText}>Complete</Text>
+      <View style={styles.swipeActionContent}>
+        <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />
+        <Text style={styles.swipeText}>Complete</Text>
+      </View>
     </View>
   );
 }
@@ -267,11 +271,14 @@ const styles = StyleSheet.create({
     paddingLeft: Layout.spacing.lg,
     borderRadius: Layout.borderRadius.md,
   },
+  swipeActionContent: {
+    alignItems: 'center',
+    gap: 4,
+  },
   swipeText: {
     color: '#fff',
     fontSize: Layout.fontSize.caption,
     fontWeight: '600',
-    marginTop: 2,
   },
   card: {
     flexDirection: 'row',

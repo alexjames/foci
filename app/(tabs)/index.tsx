@@ -1,10 +1,11 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   TouchableOpacity,
   useColorScheme,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,9 +13,10 @@ import DraggableFlatList, {
   RenderItemParams,
   ScaleDecorator,
 } from 'react-native-draggable-flatlist';
+import { Swipeable } from 'react-native-gesture-handler';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
-import { HomeToolEntry } from '@/src/types';
+import { HomeToolEntry, ToolId } from '@/src/types';
 import { useTools } from '@/src/hooks/useTools';
 import { HomeToolCard } from '@/src/components/home/HomeToolCard';
 
@@ -39,26 +41,88 @@ function DateHeader() {
   );
 }
 
+function RemoveAction() {
+  return (
+    <View style={styles.swipeAction}>
+      <View style={styles.swipeActionContent}>
+        <Ionicons name="trash-outline" size={22} color="#fff" />
+        <Text style={styles.swipeText}>Remove</Text>
+      </View>
+    </View>
+  );
+}
+
+function SwipeableToolCard({
+  item,
+  drag,
+  isActive,
+  onRemove,
+  onPress,
+}: {
+  item: HomeToolEntry;
+  drag: () => void;
+  isActive: boolean;
+  onRemove: (toolId: ToolId) => void;
+  onPress: () => void;
+}) {
+  const swipeableRef = useRef<Swipeable>(null);
+
+  const handleSwipeOpen = useCallback(
+    (direction: 'left' | 'right') => {
+      if (direction === 'right') {
+        swipeableRef.current?.close();
+        Alert.alert(
+          'Remove Tool',
+          'Remove this tool from your home screen?',
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => swipeableRef.current?.close() },
+            { text: 'Remove', style: 'destructive', onPress: () => onRemove(item.toolId) },
+          ]
+        );
+      }
+    },
+    [item.toolId, onRemove]
+  );
+
+  return (
+    <Swipeable
+      ref={swipeableRef}
+      renderRightActions={() => <RemoveAction />}
+      onSwipeableOpen={handleSwipeOpen}
+      overshootRight={false}
+      containerStyle={styles.swipeableContainer}
+    >
+      <TouchableOpacity
+        onLongPress={drag}
+        onPress={onPress}
+        activeOpacity={0.7}
+        disabled={isActive}
+      >
+        <HomeToolCard toolId={item.toolId} drag={drag} isActive={isActive} />
+      </TouchableOpacity>
+    </Swipeable>
+  );
+}
+
 export default function HomeScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
-  const { homeTools, reorderHomeTools } = useTools();
+  const { homeTools, reorderHomeTools, removeToolFromHome } = useTools();
 
   const renderItem = useCallback(
     ({ item, drag, isActive }: RenderItemParams<HomeToolEntry>) => (
       <ScaleDecorator>
-        <TouchableOpacity
-          onLongPress={drag}
+        <SwipeableToolCard
+          item={item}
+          drag={drag}
+          isActive={isActive}
+          onRemove={removeToolFromHome}
           onPress={() => router.push(`/tool/${item.toolId}` as any)}
-          activeOpacity={0.7}
-          disabled={isActive}
-        >
-          <HomeToolCard toolId={item.toolId} drag={drag} isActive={isActive} />
-        </TouchableOpacity>
+        />
       </ScaleDecorator>
     ),
-    [router]
+    [router, removeToolFromHome]
   );
 
   if (homeTools.length === 0) {
@@ -98,6 +162,29 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingBottom: 16,
+  },
+  swipeableContainer: {
+    marginBottom: Layout.spacing.sm,
+    marginHorizontal: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+    overflow: 'hidden',
+  },
+  swipeAction: {
+    flex: 1,
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingRight: Layout.spacing.lg,
+    borderRadius: Layout.borderRadius.md,
+  },
+  swipeActionContent: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  swipeText: {
+    color: '#fff',
+    fontSize: Layout.fontSize.caption,
+    fontWeight: '600',
   },
   dateHeader: {
     paddingHorizontal: Layout.spacing.lg,

@@ -185,8 +185,6 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: Layout.borderRadius.md,
     padding: Layout.spacing.md,
-    marginBottom: Layout.spacing.sm,
-    marginHorizontal: Layout.spacing.md,
   },
   cardHeader: {
     flexDirection: 'row',
