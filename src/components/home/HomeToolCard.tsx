@@ -8,8 +8,10 @@ import {
   MementoMoriConfig,
   AffirmationsConfig,
   BreathingConfig,
+  FocusTimerConfig,
+  DeadlineTrackerConfig,
 } from '@/src/types';
-import { TOOL_REGISTRY, BREATHING_PRESETS } from '@/src/constants/tools';
+import { TOOL_REGISTRY, BREATHING_PRESETS, FOCUS_TIMER_PRESETS } from '@/src/constants/tools';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
 import { useGoals } from '@/src/hooks/useGoals';
 import { useSettings } from '@/src/hooks/useSettings';
@@ -92,6 +94,52 @@ function BreathingPreview() {
   );
 }
 
+function FocusTimerPreview() {
+  const { config } = useToolConfig<FocusTimerConfig>('focus-timer');
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+  const seconds = config?.lastDurationSeconds ?? 25 * 60;
+  const minutes = Math.round(seconds / 60);
+
+  return (
+    <Text style={[styles.previewText, { color: colors.secondaryText }]}>
+      {minutes} min focus session
+    </Text>
+  );
+}
+
+function DeadlineTrackerPreview() {
+  const { config } = useToolConfig<DeadlineTrackerConfig>('deadline-tracker');
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+  const deadlines = config?.deadlines ?? [];
+
+  if (deadlines.length === 0) {
+    return (
+      <Text style={[styles.previewText, { color: colors.secondaryText }]}>
+        Tap to add your first deadline
+      </Text>
+    );
+  }
+
+  const sorted = [...deadlines].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  const next = sorted[0];
+  const now = new Date();
+  const target = new Date(next.date);
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const targetStart = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const daysUntil = Math.round((targetStart.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
+  const daysLabel = daysUntil === 0 ? 'today' : daysUntil === 1 ? 'in 1 day' : daysUntil > 1 ? `in ${daysUntil} days` : `${Math.abs(daysUntil)} days ago`;
+
+  return (
+    <Text style={[styles.previewText, { color: colors.secondaryText }]}>
+      {deadlines.length} deadline{deadlines.length !== 1 ? 's' : ''} · Next: {next.title} ({daysLabel})
+    </Text>
+  );
+}
+
 export function HomeToolCard({ toolId, drag, isActive }: HomeToolCardProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
@@ -105,6 +153,8 @@ export function HomeToolCard({ toolId, drag, isActive }: HomeToolCardProps) {
       case 'goals': return <GoalsPreview />;
       case 'affirmations': return <AffirmationsPreview />;
       case 'breathing': return <BreathingPreview />;
+      case 'focus-timer': return <FocusTimerPreview />;
+      case 'deadline-tracker': return <DeadlineTrackerPreview />;
     }
   };
 

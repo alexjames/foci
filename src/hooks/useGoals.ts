@@ -59,6 +59,6 @@ export function useGoals() {
     updateGoal,
     deleteGoal,
     setGoals,
-    canAddGoal: state.goals.length < 5,
+    canAddGoal: state.goals.length < 4,
   };
 }

@@ -1,6 +1,6 @@
 // === TOOL SYSTEM ===
 
-export type ToolId = 'memento-mori' | 'goals' | 'affirmations' | 'breathing';
+export type ToolId = 'memento-mori' | 'goals' | 'affirmations' | 'breathing' | 'focus-timer' | 'deadline-tracker';
 
 export interface ToolDefinition {
   id: ToolId;
@@ -57,7 +57,36 @@ export interface BreathingPhase {
   durationSeconds: number;
 }
 
-export type ToolConfig = MementoMoriConfig | GoalsConfig | AffirmationsConfig | BreathingConfig;
+export type FocusTimerAlarm = 'sound' | 'vibration' | 'both';
+
+export interface FocusTimerConfig {
+  toolId: 'focus-timer';
+  lastDurationSeconds: number;
+  breakDurationSeconds: number;
+  alarmType: FocusTimerAlarm;
+  notificationEnabled: boolean;
+  notificationTime?: { hour: number; minute: number };
+}
+
+export type DeadlineReminderType = '1-week' | '3-days' | '1-day';
+
+export interface Deadline {
+  id: string;
+  title: string;
+  date: string; // ISO date string
+  color?: string;
+  reminders: DeadlineReminderType[];
+  createdAt: string;
+}
+
+export interface DeadlineTrackerConfig {
+  toolId: 'deadline-tracker';
+  deadlines: Deadline[];
+  notificationEnabled: boolean;
+  notificationTime?: { hour: number; minute: number };
+}
+
+export type ToolConfig = MementoMoriConfig | GoalsConfig | AffirmationsConfig | BreathingConfig | FocusTimerConfig | DeadlineTrackerConfig;
 
 export interface HomeToolEntry {
   toolId: ToolId;

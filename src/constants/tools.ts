@@ -1,4 +1,4 @@
-import { ToolDefinition, BreathingPreset } from '../types';
+import { ToolDefinition, BreathingPreset, DeadlineReminderType } from '../types';
 
 export const TOOL_REGISTRY: ToolDefinition[] = [
   {
@@ -33,6 +33,29 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     description:
       'Guided breathing exercises with multiple presets. Box breathing, 4-7-8 relaxation, and deep breathing.',
   },
+  {
+    id: 'focus-timer',
+    name: 'Focus Timer',
+    tagline: 'Deep work, timed',
+    icon: 'timer-outline',
+    description:
+      'A countdown timer for focused work sessions. Set your duration, start the timer, and let the full-screen countdown keep you on track.',
+  },
+  {
+    id: 'deadline-tracker',
+    name: 'Deadline Tracker',
+    tagline: 'Never miss a date',
+    icon: 'calendar-outline',
+    description:
+      'Track up to 10 deadlines with color-coded cards. Set reminders so nothing slips through the cracks.',
+  },
+];
+
+export const FOCUS_TIMER_PRESETS = [
+  { label: '5 min', seconds: 5 * 60 },
+  { label: '25 min', seconds: 25 * 60 },
+  { label: '45 min', seconds: 45 * 60 },
+  { label: '1 hour', seconds: 60 * 60 },
 ];
 
 export const BREATHING_PRESETS: BreathingPreset[] = [
@@ -66,4 +89,21 @@ export const BREATHING_PRESETS: BreathingPreset[] = [
       { label: 'Exhale', durationSeconds: 6 },
     ],
   },
+];
+
+export const DEADLINE_COLORS = [
+  { id: 'slate', light: '#64748B', dark: '#94A3B8', label: 'Slate' },
+  { id: 'rose', light: '#E11D48', dark: '#FB7185', label: 'Rose' },
+  { id: 'amber', light: '#D97706', dark: '#FBBF24', label: 'Amber' },
+  { id: 'emerald', light: '#059669', dark: '#34D399', label: 'Emerald' },
+  { id: 'sky', light: '#0284C7', dark: '#38BDF8', label: 'Sky' },
+  { id: 'violet', light: '#7C3AED', dark: '#A78BFA', label: 'Violet' },
+  { id: 'pink', light: '#DB2777', dark: '#F472B6', label: 'Pink' },
+  { id: 'teal', light: '#0D9488', dark: '#2DD4BF', label: 'Teal' },
+];
+
+export const DEADLINE_REMINDER_OPTIONS: { value: DeadlineReminderType; label: string }[] = [
+  { value: '1-week', label: '1 week before' },
+  { value: '3-days', label: '3 days before' },
+  { value: '1-day', label: '1 day before' },
 ];

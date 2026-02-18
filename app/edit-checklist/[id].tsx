@@ -7,6 +7,7 @@ import {
   Pressable,
   ScrollView,
   Alert,
+  Switch,
   useColorScheme,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -19,10 +20,10 @@ import { useChecklist } from '@/src/hooks/useChecklist';
 
 const RECURRENCE_OPTIONS: { value: RecurrenceType; label: string }[] = [
   { value: 'daily', label: 'Daily' },
+  { value: 'every-n-days', label: 'Every N Days' },
   { value: 'weekdays', label: 'Weekdays' },
   { value: 'weekends', label: 'Weekends' },
   { value: 'specific-days', label: 'Specific Days' },
-  { value: 'every-n-days', label: 'Every N Days' },
 ];
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -40,6 +41,7 @@ export default function EditChecklistScreen() {
   );
 
   const [title, setTitle] = useState(existingItem?.title ?? '');
+  const [repeats, setRepeats] = useState(!!existingItem);
   const [recurrence, setRecurrence] = useState<RecurrenceType>(
     existingItem?.recurrence ?? 'daily'
   );
@@ -52,20 +54,23 @@ export default function EditChecklistScreen() {
     const trimmed = title.trim();
     if (!trimmed) return;
 
+    // If repeats is false, use 'daily' but we won't show it
+    const finalRecurrence = repeats ? recurrence : 'daily';
+
     if (existingItem) {
       updateItem({
         ...existingItem,
         title: trimmed,
-        recurrence,
-        specificDays: recurrence === 'specific-days' ? specificDays : undefined,
-        everyNDays: recurrence === 'every-n-days' ? everyNDays : undefined,
+        recurrence: finalRecurrence,
+        specificDays: finalRecurrence === 'specific-days' ? specificDays : undefined,
+        everyNDays: finalRecurrence === 'every-n-days' ? everyNDays : undefined,
       });
     } else {
       addItem({
         title: trimmed,
-        recurrence,
-        specificDays: recurrence === 'specific-days' ? specificDays : undefined,
-        everyNDays: recurrence === 'every-n-days' ? everyNDays : undefined,
+        recurrence: finalRecurrence,
+        specificDays: finalRecurrence === 'specific-days' ? specificDays : undefined,
+        everyNDays: finalRecurrence === 'every-n-days' ? everyNDays : undefined,
       });
     }
     router.back();
@@ -128,69 +133,83 @@ export default function EditChecklistScreen() {
           autoFocus={id === 'new'}
         />
 
-        {/* Recurrence */}
-        <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
-          Frequency
-        </Text>
-        {RECURRENCE_OPTIONS.map((option) => (
-          <Pressable
-            key={option.value}
-            style={[
-              styles.optionRow,
-              { backgroundColor: colors.cardBackground },
-              recurrence === option.value && { borderColor: colors.tint, borderWidth: 2 },
-            ]}
-            onPress={() => setRecurrence(option.value)}
-          >
-            <Text style={[styles.optionLabel, { color: colors.text }]}>{option.label}</Text>
-            {recurrence === option.value && (
-              <Ionicons name="checkmark-circle" size={20} color={colors.tint} />
-            )}
-          </Pressable>
-        ))}
+        {/* Repeats toggle */}
+        <View style={[styles.optionRow, { backgroundColor: colors.cardBackground, marginTop: Layout.spacing.lg }]}>
+          <Text style={[styles.optionLabel, { color: colors.text }]}>Repeats</Text>
+          <Switch
+            value={repeats}
+            onValueChange={setRepeats}
+            trackColor={{ true: colors.tint }}
+          />
+        </View>
 
-        {/* Specific days picker */}
-        {recurrence === 'specific-days' && (
-          <View style={styles.daysRow}>
-            {DAY_NAMES.map((name, index) => (
+        {/* Recurrence options - only shown if repeats is true */}
+        {repeats && (
+          <>
+            <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
+              Frequency
+            </Text>
+            {RECURRENCE_OPTIONS.map((option) => (
               <Pressable
-                key={index}
+                key={option.value}
                 style={[
-                  styles.dayChip,
+                  styles.optionRow,
                   { backgroundColor: colors.cardBackground },
-                  specificDays.includes(index) && { backgroundColor: colors.tint },
+                  recurrence === option.value && { borderColor: colors.tint, borderWidth: 2 },
                 ]}
-                onPress={() => toggleDay(index)}
+                onPress={() => setRecurrence(option.value)}
               >
-                <Text
-                  style={[
-                    styles.dayChipText,
-                    { color: colors.text },
-                    specificDays.includes(index) && { color: '#fff' },
-                  ]}
-                >
-                  {name}
-                </Text>
+                <Text style={[styles.optionLabel, { color: colors.text }]}>{option.label}</Text>
+                {recurrence === option.value && (
+                  <Ionicons name="checkmark-circle" size={20} color={colors.tint} />
+                )}
               </Pressable>
             ))}
-          </View>
-        )}
 
-        {/* Every N days picker */}
-        {recurrence === 'every-n-days' && (
-          <View style={[styles.stepperContainer, { backgroundColor: colors.cardBackground }]}>
-            <Text style={[styles.optionLabel, { color: colors.text }]}>Every</Text>
-            <View style={styles.stepperRow}>
-              <Pressable onPress={() => setEveryNDays(Math.max(2, everyNDays - 1))}>
-                <Ionicons name="remove-circle-outline" size={28} color={colors.tint} />
-              </Pressable>
-              <Text style={[styles.stepperValue, { color: colors.text }]}>{everyNDays}</Text>
-              <Pressable onPress={() => setEveryNDays(Math.min(30, everyNDays + 1))}>
-                <Ionicons name="add-circle-outline" size={28} color={colors.tint} />
-              </Pressable>
-            </View>
-            <Text style={[styles.optionLabel, { color: colors.text }]}>days</Text>
-          </View>
+            {/* Specific days picker */}
+            {recurrence === 'specific-days' && (
+              <View style={styles.daysRow}>
+                {DAY_NAMES.map((name, index) => (
+                  <Pressable
+                    key={index}
+                    style={[
+                      styles.dayChip,
+                      { backgroundColor: colors.cardBackground },
+                      specificDays.includes(index) && { backgroundColor: colors.tint },
+                    ]}
+                    onPress={() => toggleDay(index)}
+                  >
+                    <Text
+                      style={[
+                        styles.dayChipText,
+                        { color: colors.text },
+                        specificDays.includes(index) && { color: '#fff' },
+                      ]}
+                    >
+                      {name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            {/* Every N days picker */}
+            {recurrence === 'every-n-days' && (
+              <View style={[styles.stepperContainer, { backgroundColor: colors.cardBackground }]}>
+                <Text style={[styles.optionLabel, { color: colors.text }]}>Every</Text>
+                <View style={styles.stepperRow}>
+                  <Pressable onPress={() => setEveryNDays(Math.max(2, everyNDays - 1))}>
+                    <Ionicons name="remove-circle-outline" size={28} color={colors.tint} />
+                  </Pressable>
+                  <Text style={[styles.stepperValue, { color: colors.text }]}>{everyNDays}</Text>
+                  <Pressable onPress={() => setEveryNDays(Math.min(30, everyNDays + 1))}>
+                    <Ionicons name="add-circle-outline" size={28} color={colors.tint} />
+                  </Pressable>
+                </View>
+                <Text style={[styles.optionLabel, { color: colors.text }]}>days</Text>
+              </View>
+            )}
+          </>
         )}
 
         {/* Delete button for existing items */}

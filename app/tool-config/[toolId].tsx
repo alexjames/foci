@@ -19,6 +19,8 @@ import {
   GoalsConfig,
   AffirmationsConfig,
   BreathingConfig,
+  FocusTimerConfig,
+  FocusTimerAlarm,
   ToolConfig,
 } from '@/src/types';
 import { TOOL_REGISTRY, BREATHING_PRESETS } from '@/src/constants/tools';
@@ -39,6 +41,20 @@ function getDefaultConfig(toolId: ToolId): ToolConfig {
         toolId: 'breathing',
         selectedPresetId: 'box',
         durationSeconds: 120,
+        notificationEnabled: false,
+      };
+    case 'focus-timer':
+      return {
+        toolId: 'focus-timer',
+        lastDurationSeconds: 25 * 60,
+        breakDurationSeconds: 5 * 60,
+        alarmType: 'both',
+        notificationEnabled: false,
+      };
+    case 'deadline-tracker':
+      return {
+        toolId: 'deadline-tracker',
+        deadlines: [],
         notificationEnabled: false,
       };
   }
@@ -107,6 +123,55 @@ function BreathingConfigView({ config, onUpdate }: { config: BreathingConfig; on
           </Pressable>
           <Text style={[styles.stepperValue, { color: colors.text }]}>{config.durationSeconds}</Text>
           <Pressable onPress={() => onUpdate({ ...config, durationSeconds: Math.min(600, config.durationSeconds + 30) })}>
+            <Ionicons name="add-circle-outline" size={28} color={colors.tint} />
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const ALARM_OPTIONS: { value: FocusTimerAlarm; label: string }[] = [
+  { value: 'both', label: 'Sound & Vibration' },
+  { value: 'sound', label: 'Sound Only' },
+  { value: 'vibration', label: 'Vibration Only' },
+];
+
+function FocusTimerConfigView({ config, onUpdate }: { config: FocusTimerConfig; onUpdate: (c: FocusTimerConfig) => void }) {
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+
+  return (
+    <View style={styles.section}>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Alarm</Text>
+      {ALARM_OPTIONS.map((option) => (
+        <Pressable
+          key={option.value}
+          style={[
+            styles.row,
+            { backgroundColor: colors.cardBackground },
+            config.alarmType === option.value && { borderColor: colors.tint, borderWidth: 2 },
+          ]}
+          onPress={() => onUpdate({ ...config, alarmType: option.value })}
+        >
+          <Text style={[styles.rowLabel, { color: colors.text }]}>{option.label}</Text>
+          {config.alarmType === option.value && (
+            <Ionicons name="checkmark-circle" size={20} color={colors.tint} />
+          )}
+        </Pressable>
+      ))}
+
+      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: Layout.spacing.md }]}>
+        Break Duration
+      </Text>
+      <View style={[styles.row, { backgroundColor: colors.cardBackground }]}>
+        <Text style={[styles.rowLabel, { color: colors.text }]}>Minutes</Text>
+        <View style={styles.stepperRow}>
+          <Pressable onPress={() => onUpdate({ ...config, breakDurationSeconds: Math.max(60, config.breakDurationSeconds - 60) })}>
+            <Ionicons name="remove-circle-outline" size={28} color={colors.tint} />
+          </Pressable>
+          <Text style={[styles.stepperValue, { color: colors.text }]}>{Math.round(config.breakDurationSeconds / 60)}</Text>
+          <Pressable onPress={() => onUpdate({ ...config, breakDurationSeconds: Math.min(30 * 60, config.breakDurationSeconds + 60) })}>
             <Ionicons name="add-circle-outline" size={28} color={colors.tint} />
           </Pressable>
         </View>
@@ -190,6 +255,12 @@ export default function ToolConfigScreen() {
         {toolId === 'breathing' && (
           <BreathingConfigView
             config={currentConfig as BreathingConfig}
+            onUpdate={(c) => handleUpdateConfig(c)}
+          />
+        )}
+        {toolId === 'focus-timer' && (
+          <FocusTimerConfigView
+            config={currentConfig as FocusTimerConfig}
             onUpdate={(c) => handleUpdateConfig(c)}
           />
         )}

@@ -44,8 +44,14 @@ import { EmptyState } from '@/src/components/EmptyState';
 // Breathing imports
 import { BreathingSessionView } from '@/src/components/breathing/BreathingSessionView';
 
+// Focus Timer imports
+import { FocusTimerSession } from '@/src/components/focus-timer/FocusTimerSession';
+
 // Affirmation imports
 import { AffirmationsList } from '@/src/components/affirmations/AffirmationsList';
+
+// Deadline Tracker imports
+import { DeadlineTrackerList } from '@/src/components/deadline-tracker/DeadlineTrackerList';
 
 function MementoView() {
   const { config, setConfig } = useToolConfig<MementoMoriConfig>('memento-mori');
@@ -124,19 +130,29 @@ function GoalsView() {
         {goals.length === 0 ? (
           <EmptyState title="No Goals Yet" message="Tap the + button to add your first goal." />
         ) : (
-          goals.map((goal) => (
-            <View key={goal.id} style={[styles.goalRow, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
-              <Pressable onPress={() => router.push(`/edit-goal/${goal.id}`)} style={styles.goalInfo}>
-                <Text style={[styles.goalName, { color: colors.text }]}>{goal.name}</Text>
-                {goal.outcome ? (
-                  <Text style={[styles.goalSubtext, { color: colors.secondaryText }]} numberOfLines={1}>{goal.outcome}</Text>
-                ) : null}
-              </Pressable>
-              <Pressable onPress={() => handleDelete(goal.id, goal.name)} hitSlop={8} style={{ padding: Layout.spacing.xs }}>
-                <Ionicons name="trash-outline" size={20} color={colors.destructive} />
-              </Pressable>
-            </View>
-          ))
+          <>
+            {goals.map((goal) => (
+              <View key={goal.id} style={[styles.goalRow, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
+                <Pressable onPress={() => router.push(`/edit-goal/${goal.id}`)} style={styles.goalInfo}>
+                  <Text style={[styles.goalName, { color: colors.text }]}>{goal.name}</Text>
+                  {goal.outcome ? (
+                    <Text style={[styles.goalSubtext, { color: colors.secondaryText }]} numberOfLines={1}>{goal.outcome}</Text>
+                  ) : null}
+                </Pressable>
+                <Pressable onPress={() => handleDelete(goal.id, goal.name)} hitSlop={8} style={{ padding: Layout.spacing.xs }}>
+                  <Ionicons name="trash-outline" size={20} color={colors.destructive} />
+                </Pressable>
+              </View>
+            ))}
+            {!canAddGoal && (
+              <View style={[styles.maxGoalsMessage, { backgroundColor: colors.cardBackground }]}>
+                <Ionicons name="information-circle-outline" size={20} color={colors.secondaryText} />
+                <Text style={[styles.maxGoalsText, { color: colors.secondaryText }]}>
+                  Avoid setting too many goals at once. Research shows that the brain functions best when focused on 4 or fewer goals at any given point in time.
+                </Text>
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
       <View style={styles.bottomActions}>
@@ -163,6 +179,14 @@ function BreathingView() {
   return <BreathingSessionView />;
 }
 
+function FocusTimerView() {
+  return <FocusTimerSession />;
+}
+
+function DeadlineTrackerView() {
+  return <DeadlineTrackerList />;
+}
+
 export default function ToolScreen() {
   const { toolId } = useLocalSearchParams<{ toolId: string }>();
   const router = useRouter();
@@ -176,6 +200,8 @@ export default function ToolScreen() {
       case 'goals': return <GoalsView />;
       case 'affirmations': return <AffirmationsView />;
       case 'breathing': return <BreathingView />;
+      case 'focus-timer': return <FocusTimerView />;
+      case 'deadline-tracker': return <DeadlineTrackerView />;
       default: return <Text style={{ color: colors.text }}>Unknown tool</Text>;
     }
   };
@@ -221,6 +247,19 @@ const styles = StyleSheet.create({
   goalInfo: { flex: 1, marginRight: Layout.spacing.md },
   goalName: { fontSize: Layout.fontSize.body, fontWeight: '600' },
   goalSubtext: { fontSize: Layout.fontSize.caption, marginTop: 2 },
+  maxGoalsMessage: {
+    flexDirection: 'row',
+    padding: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+    marginTop: Layout.spacing.md,
+    gap: Layout.spacing.sm,
+    alignItems: 'flex-start',
+  },
+  maxGoalsText: {
+    flex: 1,
+    fontSize: Layout.fontSize.caption,
+    lineHeight: 18,
+  },
   goalsScrollContent: {
     padding: Layout.spacing.md,
     paddingBottom: 200,
