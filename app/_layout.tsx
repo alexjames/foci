@@ -95,6 +95,13 @@ function RootNavigator() {
           }}
         />
         <Stack.Screen
+          name="edit-tally/[id]"
+          options={{
+            headerShown: false,
+            presentation: 'modal',
+          }}
+        />
+        <Stack.Screen
           name="routine-cards/[toolId]"
           options={{
             headerShown: false,

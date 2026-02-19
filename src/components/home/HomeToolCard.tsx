@@ -175,6 +175,28 @@ function StreakTrackerPreview() {
   );
 }
 
+function TallyCounterPreview() {
+  const { config } = useToolConfig<import('@/src/types').TallyCounterConfig>('tally-counter');
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+  const counters = config?.counters ?? [];
+
+  if (counters.length === 0) {
+    return (
+      <Text style={[styles.previewText, { color: colors.secondaryText }]}>
+        Tap to add your first counter
+      </Text>
+    );
+  }
+
+  const top = [...counters].sort((a, b) => b.count - a.count)[0];
+  return (
+    <Text style={[styles.previewText, { color: colors.secondaryText }]}>
+      {counters.length} counter{counters.length !== 1 ? 's' : ''} · highest: {top.title} ({top.count})
+    </Text>
+  );
+}
+
 function RoutinePreview({ toolId }: { toolId: 'morning-routine' | 'evening-routine' }) {
   const { config } = useToolConfig<RoutineConfig>(toolId);
   const colorScheme = useColorScheme() ?? 'light';
@@ -214,6 +236,7 @@ export function HomeToolCard({ toolId, drag, isActive }: HomeToolCardProps) {
       case 'streak-tracker': return <StreakTrackerPreview />;
       case 'morning-routine': return <RoutinePreview toolId="morning-routine" />;
       case 'evening-routine': return <RoutinePreview toolId="evening-routine" />;
+      case 'tally-counter': return <TallyCounterPreview />;
     }
   };
 

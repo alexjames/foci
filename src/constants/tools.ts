@@ -73,6 +73,14 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     description:
       'Wind down with a guided evening routine. Customize your steps and play through them each night.',
   },
+  {
+    id: 'tally-counter',
+    name: 'Tally Counter',
+    tagline: 'Count what matters',
+    icon: 'add-circle-outline',
+    description:
+      'Track anything with a simple tap counter. Add multiple counters, color-code them, and increment or decrement with a swipe.',
+  },
 ];
 
 export const FOCUS_TIMER_PRESETS = [
@@ -116,14 +124,14 @@ export const BREATHING_PRESETS: BreathingPreset[] = [
 ];
 
 export const DEADLINE_COLORS = [
-  { id: 'slate', light: '#64748B', dark: '#94A3B8', label: 'Slate' },
-  { id: 'rose', light: '#E11D48', dark: '#FB7185', label: 'Rose' },
-  { id: 'amber', light: '#D97706', dark: '#FBBF24', label: 'Amber' },
-  { id: 'emerald', light: '#059669', dark: '#34D399', label: 'Emerald' },
-  { id: 'sky', light: '#0284C7', dark: '#38BDF8', label: 'Sky' },
-  { id: 'violet', light: '#7C3AED', dark: '#A78BFA', label: 'Violet' },
-  { id: 'pink', light: '#DB2777', dark: '#F472B6', label: 'Pink' },
-  { id: 'teal', light: '#0D9488', dark: '#2DD4BF', label: 'Teal' },
+  { id: 'teal',      light: '#7ECECE', dark: '#7ECECE', label: 'Teal' },
+  { id: 'turquoise', light: '#6DC8A8', dark: '#6DC8A8', label: 'Turquoise' },
+  { id: 'matcha',    light: '#B8D4A0', dark: '#B8D4A0', label: 'Matcha' },
+  { id: 'sunshine',  light: '#F5C97A', dark: '#F5C97A', label: 'Sunshine' },
+  { id: 'peach',     light: '#F4A8B8', dark: '#F4A8B8', label: 'Peach' },
+  { id: 'lilac',     light: '#C4A8E0', dark: '#C4A8E0', label: 'Lilac' },
+  { id: 'pearl',     light: '#E0DEDD', dark: '#E0DEDD', label: 'Pearl' },
+  { id: 'pebble',    light: '#9E9E9E', dark: '#9E9E9E', label: 'Pebble' },
 ];
 
 export const DEADLINE_REMINDER_OPTIONS: { value: DeadlineReminderType; label: string }[] = [

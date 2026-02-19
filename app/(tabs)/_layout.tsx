@@ -30,7 +30,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="checklist"
         options={{
-          title: 'Checklist',
+          title: 'TO-DOs',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="list-outline" size={size} color={color} />
           ),

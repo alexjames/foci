@@ -52,6 +52,9 @@ import { AffirmationsList } from '@/src/components/affirmations/AffirmationsList
 // Deadline Tracker imports
 import { DeadlineTrackerList } from '@/src/components/deadline-tracker/DeadlineTrackerList';
 
+// Tally Counter imports
+import { TallyCounterList } from '@/src/components/tally-counter/TallyCounterList';
+
 // Streak Tracker imports
 import { StreakTrackerList } from '@/src/components/streak-tracker/StreakTrackerList';
 
@@ -196,6 +199,10 @@ function StreakTrackerView() {
   return <StreakTrackerList />;
 }
 
+function TallyCounterView() {
+  return <TallyCounterList />;
+}
+
 function RoutineView({ toolId }: { toolId: 'morning-routine' | 'evening-routine' }) {
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -223,6 +230,7 @@ export default function ToolScreen() {
       case 'streak-tracker': return <StreakTrackerView />;
       case 'morning-routine': return <RoutineView toolId="morning-routine" />;
       case 'evening-routine': return <RoutineView toolId="evening-routine" />;
+      case 'tally-counter': return <TallyCounterView />;
       default: return <Text style={{ color: colors.text }}>Unknown tool</Text>;
     }
   };
