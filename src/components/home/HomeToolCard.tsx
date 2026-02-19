@@ -225,17 +225,19 @@ export function HomeToolCard({ toolId, drag, isActive }: HomeToolCardProps) {
         isActive && { opacity: 0.9, elevation: 8 },
       ]}
     >
-      <View style={styles.cardHeader}>
-        <Ionicons name={tool.icon as any} size={24} color={colors.tint} />
-        <Text style={[styles.cardTitle, { color: colors.text }]}>{tool.name}</Text>
-        <Ionicons
-          name="menu"
-          size={20}
-          color={colors.secondaryText}
-          onLongPress={drag}
-        />
+      <View style={styles.cardContent}>
+        <View style={styles.cardHeader}>
+          <Ionicons name={tool.icon as any} size={24} color={colors.tint} />
+          <Text style={[styles.cardTitle, { color: colors.text }]}>{tool.name}</Text>
+        </View>
+        <View style={styles.preview}>{renderPreview()}</View>
       </View>
-      <View style={styles.preview}>{renderPreview()}</View>
+      <Ionicons
+        name="menu"
+        size={20}
+        color={colors.secondaryText}
+        onLongPress={drag}
+      />
     </View>
   );
 }
@@ -244,6 +246,12 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: Layout.borderRadius.md,
     padding: Layout.spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.sm,
+  },
+  cardContent: {
+    flex: 1,
   },
   cardHeader: {
     flexDirection: 'row',

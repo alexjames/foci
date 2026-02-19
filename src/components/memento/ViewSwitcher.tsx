@@ -9,21 +9,19 @@ export type VisualizationType =
   | 'hourglass'
   | 'yearGrid'
   | 'weekGrid'
-  | 'monthDots'
   | 'progressBar'
   | 'seasons'
-  | 'heartbeats'
-  | 'sunsets';
+  | 'sunsets'
+  | 'heartbeats';
 
 const VIEW_OPTIONS: { key: VisualizationType; label: string }[] = [
   { key: 'hourglass', label: 'Hourglass' },
   { key: 'yearGrid', label: 'Years' },
   { key: 'weekGrid', label: 'Weeks' },
-  { key: 'monthDots', label: 'Months' },
   { key: 'progressBar', label: 'Progress' },
   { key: 'seasons', label: 'Seasons' },
-  { key: 'heartbeats', label: 'Heartbeats' },
   { key: 'sunsets', label: 'Sunsets' },
+  { key: 'heartbeats', label: 'Heartbeats' },
 ];
 
 interface ViewSwitcherProps {

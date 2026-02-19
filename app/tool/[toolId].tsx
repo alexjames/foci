@@ -30,7 +30,6 @@ import {
   HourglassView,
   YearGridView,
   WeekGridView,
-  MonthDotsView,
   ProgressBarView,
   SeasonsView,
   HeartbeatsView,
@@ -95,11 +94,10 @@ function MementoView() {
       case 'hourglass': return <HourglassView lifeData={lifeData} />;
       case 'yearGrid': return <YearGridView lifeData={lifeData} />;
       case 'weekGrid': return <WeekGridView lifeData={lifeData} />;
-      case 'monthDots': return <MonthDotsView lifeData={lifeData} />;
       case 'progressBar': return <ProgressBarView lifeData={lifeData} />;
       case 'seasons': return <SeasonsView lifeData={lifeData} />;
-      case 'heartbeats': return <HeartbeatsView lifeData={lifeData} />;
       case 'sunsets': return <SunsetsView lifeData={lifeData} />;
+      case 'heartbeats': return <HeartbeatsView lifeData={lifeData} />;
     }
   };
 
