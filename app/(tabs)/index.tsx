@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -56,12 +56,14 @@ function SwipeableToolCard({
   item,
   drag,
   isActive,
+  showHandle,
   onRemove,
   onPress,
 }: {
   item: HomeToolEntry;
   drag: () => void;
   isActive: boolean;
+  showHandle: boolean;
   onRemove: (toolId: ToolId) => void;
   onPress: () => void;
 }) {
@@ -98,7 +100,7 @@ function SwipeableToolCard({
         activeOpacity={0.7}
         disabled={isActive}
       >
-        <HomeToolCard toolId={item.toolId} drag={drag} isActive={isActive} />
+        <HomeToolCard toolId={item.toolId} drag={drag} isActive={isActive} showHandle={showHandle} />
       </TouchableOpacity>
     </Swipeable>
   );
@@ -109,20 +111,25 @@ export default function HomeScreen() {
   const colors = Colors[colorScheme];
   const router = useRouter();
   const { homeTools, reorderHomeTools, removeToolFromHome } = useTools();
+  const [isDragging, setIsDragging] = useState(false);
 
   const renderItem = useCallback(
     ({ item, drag, isActive }: RenderItemParams<HomeToolEntry>) => (
       <ScaleDecorator>
         <SwipeableToolCard
           item={item}
-          drag={drag}
+          drag={() => {
+            setIsDragging(true);
+            drag();
+          }}
           isActive={isActive}
+          showHandle={isDragging}
           onRemove={removeToolFromHome}
           onPress={() => router.push(`/tool/${item.toolId}` as any)}
         />
       </ScaleDecorator>
     ),
-    [router, removeToolFromHome]
+    [router, removeToolFromHome, isDragging]
   );
 
   if (homeTools.length === 0) {
@@ -146,7 +153,7 @@ export default function HomeScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <DraggableFlatList
         data={homeTools}
-        onDragEnd={({ data }) => reorderHomeTools(data)}
+        onDragEnd={({ data }) => { reorderHomeTools(data); setIsDragging(false); }}
         keyExtractor={(item) => item.toolId}
         renderItem={renderItem}
         ListHeaderComponent={<DateHeader />}

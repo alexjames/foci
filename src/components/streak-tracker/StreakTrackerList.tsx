@@ -1,10 +1,9 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   Pressable,
-  ScrollView,
   Alert,
   Modal,
   useColorScheme,
@@ -12,6 +11,11 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
+import DraggableFlatList, {
+  RenderItemParams,
+  ScaleDecorator,
+} from 'react-native-draggable-flatlist';
+import * as Haptics from 'expo-haptics';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
 import { StreakTrackerConfig, Streak } from '@/src/types';
@@ -85,15 +89,21 @@ function SwipeableStreakCard({
   onCardPress,
   onReset,
   onDelete,
+  drag,
+  isActive,
+  showHandle,
 }: {
   streak: Streak;
   scheme: 'light' | 'dark';
   onCardPress: (id: string) => void;
   onReset: (id: string, title: string) => void;
   onDelete: (id: string, title: string) => void;
+  drag: () => void;
+  isActive: boolean;
+  showHandle: boolean;
 }) {
   const colors = Colors[scheme];
-  const swipeableRef = useRef<Swipeable>(null);
+  const swipeableRef = React.useRef<Swipeable>(null);
   const accentColor = getStreakColor(streak.color, scheme);
   const daysSince = getDaysSince(streak.startDate);
 
@@ -108,44 +118,60 @@ function SwipeableStreakCard({
   }, [streak.id, streak.title, onDelete]);
 
   return (
-    <Swipeable
-      ref={swipeableRef}
-      renderRightActions={() => <DeleteAction />}
-      renderLeftActions={() => <ResetAction />}
-      onSwipeableOpen={(direction) => {
-        if (direction === 'left') handleSwipeRight();
-        else handleSwipeLeft();
-      }}
-      overshootRight={false}
-      overshootLeft={false}
-      containerStyle={styles.swipeableContainer}
-    >
-      <Pressable
-        onPress={() => onCardPress(streak.id)}
-        style={[
-          styles.card,
-          { backgroundColor: colors.cardBackground, borderLeftColor: accentColor },
-        ]}
-      >
-        <View style={styles.cardContent}>
-          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
-            {streak.title}
-          </Text>
-          <Text style={[styles.cardDate, { color: colors.secondaryText }]}>
-            Since {formatStreakDate(streak.startDate)}
-          </Text>
-        </View>
-        <View style={[styles.divider, { backgroundColor: colors.cardBorder }]} />
-        <View style={styles.cardRight}>
-          <Text style={[styles.daysNumber, { color: accentColor }]}>
-            {daysSince}
-          </Text>
-          <Text style={[styles.daysSubLabel, { color: accentColor }]}>
-            {getDaysLabel(daysSince)}
-          </Text>
-        </View>
-      </Pressable>
-    </Swipeable>
+    <ScaleDecorator>
+      <View style={[styles.swipeableContainer, isActive && styles.swipeableActive]}>
+        <Swipeable
+          ref={swipeableRef}
+          renderRightActions={() => <DeleteAction />}
+          renderLeftActions={() => <ResetAction />}
+          onSwipeableOpen={(direction) => {
+            if (direction === 'left') handleSwipeRight();
+            else handleSwipeLeft();
+          }}
+          overshootRight={false}
+          overshootLeft={false}
+          enabled={!isActive}
+        >
+          <Pressable
+            onPress={() => onCardPress(streak.id)}
+            onLongPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              drag();
+            }}
+            style={[
+              styles.card,
+              { backgroundColor: colors.cardBackground, borderLeftColor: accentColor },
+            ]}
+          >
+            <View style={styles.cardContent}>
+              <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
+                {streak.title}
+              </Text>
+              <Text style={[styles.cardDate, { color: colors.secondaryText }]}>
+                Since {formatStreakDate(streak.startDate)}
+              </Text>
+            </View>
+            <View style={[styles.divider, { backgroundColor: colors.cardBorder }]} />
+            <View style={styles.cardRight}>
+              <Text style={[styles.daysNumber, { color: accentColor }]}>
+                {daysSince}
+              </Text>
+              <Text style={[styles.daysSubLabel, { color: accentColor }]}>
+                {getDaysLabel(daysSince)}
+              </Text>
+            </View>
+            {showHandle && (
+              <Ionicons
+                name="reorder-three-outline"
+                size={20}
+                color={colors.secondaryText}
+                style={styles.dragHandle}
+              />
+            )}
+          </Pressable>
+        </Swipeable>
+      </View>
+    </ScaleDecorator>
   );
 }
 
@@ -236,30 +262,28 @@ function StreakDetailSheet({
   );
 }
 
+const DEFAULT_CONFIG: StreakTrackerConfig = {
+  toolId: 'streak-tracker',
+  streaks: [],
+  notificationEnabled: false,
+};
+
 export function StreakTrackerList() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
   const { config, setConfig } = useToolConfig<StreakTrackerConfig>('streak-tracker');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const streaks = config?.streaks ?? [];
-  const sorted = [...streaks].sort(
-    (a, b) => getDaysSince(b.startDate) - getDaysSince(a.startDate)
-  );
   const canAdd = streaks.length < 20;
 
   const selectedStreak = selectedId ? streaks.find((s) => s.id === selectedId) ?? null : null;
 
-  const defaultConfig: StreakTrackerConfig = {
-    toolId: 'streak-tracker',
-    streaks: [],
-    notificationEnabled: false,
-  };
-
   const removeStreak = useCallback(
     (id: string) => {
-      const current = config ?? defaultConfig;
+      const current = config ?? DEFAULT_CONFIG;
       setConfig({
         ...current,
         streaks: current.streaks.filter((s) => s.id !== id),
@@ -270,7 +294,7 @@ export function StreakTrackerList() {
 
   const resetStreak = useCallback(
     (id: string) => {
-      const current = config ?? defaultConfig;
+      const current = config ?? DEFAULT_CONFIG;
       setConfig({
         ...current,
         streaks: current.streaks.map((s) => {
@@ -323,30 +347,54 @@ export function StreakTrackerList() {
     [removeStreak]
   );
 
+  const handleDragEnd = useCallback(
+    ({ data }: { data: Streak[] }) => {
+      const current = config ?? DEFAULT_CONFIG;
+      setConfig({ ...current, streaks: data });
+      setIsDragging(false);
+    },
+    [config, setConfig]
+  );
+
+  const renderItem = useCallback(
+    ({ item, drag, isActive }: RenderItemParams<Streak>) => (
+      <SwipeableStreakCard
+        streak={item}
+        scheme={colorScheme}
+        onCardPress={setSelectedId}
+        onReset={handleReset}
+        onDelete={handleDelete}
+        drag={() => {
+          setIsDragging(true);
+          drag();
+        }}
+        isActive={isActive}
+        showHandle={isDragging}
+      />
+    ),
+    [colorScheme, handleReset, handleDelete, isDragging]
+  );
+
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.list}>
-        {sorted.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="flame-outline" size={48} color={colors.secondaryText} />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>No streaks yet</Text>
-            <Text style={[styles.emptyMessage, { color: colors.secondaryText }]}>
-              Tap + to start tracking your first streak
-            </Text>
-          </View>
-        ) : (
-          sorted.map((s) => (
-            <SwipeableStreakCard
-              key={s.id}
-              streak={s}
-              scheme={colorScheme}
-              onCardPress={setSelectedId}
-              onReset={handleReset}
-              onDelete={handleDelete}
-            />
-          ))
-        )}
-      </ScrollView>
+      {streaks.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="flame-outline" size={48} color={colors.secondaryText} />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>No streaks yet</Text>
+          <Text style={[styles.emptyMessage, { color: colors.secondaryText }]}>
+            Tap + to start tracking your first streak
+          </Text>
+        </View>
+      ) : (
+        <DraggableFlatList
+          data={streaks}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          onDragEnd={handleDragEnd}
+          contentContainerStyle={styles.list}
+          activationDistance={1}
+        />
+      )}
       {canAdd && (
         <View style={styles.fabContainer}>
           <Pressable
@@ -379,6 +427,14 @@ const styles = StyleSheet.create({
     borderRadius: Layout.borderRadius.md,
     overflow: 'hidden',
     marginBottom: Layout.spacing.sm,
+  },
+  swipeableActive: {
+    opacity: 0.95,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
   },
   swipeActionRight: {
     flex: 1,
@@ -438,6 +494,10 @@ const styles = StyleSheet.create({
   daysSubLabel: {
     fontSize: Layout.fontSize.caption,
     fontWeight: '600',
+  },
+  dragHandle: {
+    marginLeft: Layout.spacing.sm,
+    opacity: 0.4,
   },
   emptyState: {
     alignItems: 'center',

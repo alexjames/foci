@@ -23,6 +23,7 @@ interface HomeToolCardProps {
   toolId: ToolId;
   drag?: () => void;
   isActive?: boolean;
+  showHandle?: boolean;
 }
 
 function MementoPreview() {
@@ -218,7 +219,7 @@ function RoutinesPreview() {
   );
 }
 
-export function HomeToolCard({ toolId, drag, isActive }: HomeToolCardProps) {
+export function HomeToolCard({ toolId, drag, isActive, showHandle }: HomeToolCardProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const tool = TOOL_REGISTRY.find((t) => t.id === toolId);
@@ -254,12 +255,14 @@ export function HomeToolCard({ toolId, drag, isActive }: HomeToolCardProps) {
         </View>
         <View style={styles.preview}>{renderPreview()}</View>
       </View>
-      <Ionicons
-        name="menu"
-        size={20}
-        color={colors.secondaryText}
-        onLongPress={drag}
-      />
+      {showHandle && (
+        <Ionicons
+          name="menu"
+          size={20}
+          color={colors.secondaryText}
+          onLongPress={drag}
+        />
+      )}
     </View>
   );
 }
