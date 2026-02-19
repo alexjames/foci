@@ -24,13 +24,42 @@ function getTallyColor(colorId: string | undefined, scheme: 'light' | 'dark'): s
   return scheme === 'dark' ? '#94A3B8' : '#64748B';
 }
 
-function LeftAction() {
+function LeftActions({
+  count,
+  accentColor,
+  onIncrement,
+  onDecrement,
+}: {
+  count: number;
+  accentColor: string;
+  onIncrement: () => void;
+  onDecrement: () => void;
+}) {
   return (
-    <View style={styles.swipeActionLeft}>
-      <View style={styles.swipeActionContent}>
+    <View style={styles.leftActionsRow}>
+      <Pressable
+        style={[styles.swipeActionButton, { backgroundColor: '#FF9500' }]}
+        onPress={() => {
+          onDecrement();
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }}
+      >
         <Ionicons name="remove" size={22} color="#fff" />
         <Text style={styles.swipeText}>−1</Text>
+      </Pressable>
+      <View style={[styles.swipeCountDisplay, { backgroundColor: accentColor }]}>
+        <Text style={styles.swipeCountNumber}>{count}</Text>
       </View>
+      <Pressable
+        style={[styles.swipeActionButton, { backgroundColor: '#34C759' }]}
+        onPress={() => {
+          onIncrement();
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }}
+      >
+        <Ionicons name="add" size={22} color="#fff" />
+        <Text style={styles.swipeText}>+1</Text>
+      </Pressable>
     </View>
   );
 }
@@ -66,21 +95,25 @@ function SwipeableTallyCard({
 
   const handleSwipeOpen = useCallback(
     (direction: 'left' | 'right') => {
-      if (direction === 'left') {
-        swipeableRef.current?.close();
-        onDecrement(counter.id);
-      } else {
+      if (direction === 'right') {
         swipeableRef.current?.close();
         onDelete(counter.id, counter.title);
       }
     },
-    [counter.id, counter.title, onDecrement, onDelete]
+    [counter.id, counter.title, onDelete]
   );
 
   return (
     <Swipeable
       ref={swipeableRef}
-      renderLeftActions={() => <LeftAction />}
+      renderLeftActions={() => (
+        <LeftActions
+          count={counter.count}
+          accentColor={accentColor}
+          onIncrement={() => onIncrement(counter.id)}
+          onDecrement={() => onDecrement(counter.id)}
+        />
+      )}
       renderRightActions={() => <RightAction />}
       onSwipeableOpen={handleSwipeOpen}
       overshootLeft={false}
@@ -111,7 +144,6 @@ function SwipeableTallyCard({
           <Text style={[styles.countNumber, { color: accentColor }]}>
             {counter.count}
           </Text>
-          <Ionicons name="add" size={18} color={accentColor} />
         </Pressable>
       </View>
     </Swipeable>
@@ -221,13 +253,24 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: Layout.spacing.sm,
   },
-  swipeActionLeft: {
-    flex: 1,
-    backgroundColor: '#FF9500',
+  leftActionsRow: {
+    flexDirection: 'row',
+  },
+  swipeActionButton: {
+    width: 72,
     justifyContent: 'center',
-    alignItems: 'flex-start',
-    paddingLeft: Layout.spacing.lg,
-    borderRadius: Layout.borderRadius.md,
+    alignItems: 'center',
+    gap: 4,
+  },
+  swipeCountDisplay: {
+    width: 64,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  swipeCountNumber: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '700',
   },
   swipeActionRight: {
     flex: 1,
