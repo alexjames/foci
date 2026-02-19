@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, Animated, Dimensions, useColorScheme } from 'react-native';
+import { StyleSheet, Animated, Dimensions, useColorScheme, View as RNView } from 'react-native';
 import { Text, View } from '@/components/Themed';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
@@ -11,12 +11,20 @@ interface HourglassViewProps {
 
 const GLASS_WIDTH = Dimensions.get('window').width * 0.55;
 const GLASS_HEIGHT = GLASS_WIDTH * 1.8;
-const HALF_HEIGHT = (GLASS_HEIGHT - 20) / 2;
-const NECK_HEIGHT = 20;
+const HALF_HEIGHT = (GLASS_HEIGHT - 24) / 2;
+const NECK_HEIGHT = 24;
 
-function FallingSandParticle({ delay, color }: { delay: number; color: string }) {
+// Aesthetic blue palette
+const SAND_TOP = '#60A5FA';
+const SAND_MID = '#3B82F6';
+const SAND_BOTTOM = '#1D4ED8';
+const GLASS_BORDER = 'rgba(96,165,250,0.35)';
+const GLOW_COLOR = 'rgba(96,165,250,0.28)';
+
+function GlowParticle({ delay }: { delay: number }) {
   const translateY = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.6)).current;
 
   useEffect(() => {
     const animation = Animated.loop(
@@ -24,14 +32,20 @@ function FallingSandParticle({ delay, color }: { delay: number; color: string })
         Animated.delay(delay),
         Animated.parallel([
           Animated.timing(translateY, {
-            toValue: NECK_HEIGHT + 10,
-            duration: 800,
+            toValue: NECK_HEIGHT + 8,
+            duration: 900,
             useNativeDriver: true,
           }),
           Animated.sequence([
-            Animated.timing(opacity, { toValue: 1, duration: 100, useNativeDriver: true }),
-            Animated.delay(500),
-            Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+            Animated.parallel([
+              Animated.timing(opacity, { toValue: 1, duration: 120, useNativeDriver: true }),
+              Animated.timing(scale, { toValue: 1, duration: 120, useNativeDriver: true }),
+            ]),
+            Animated.delay(550),
+            Animated.parallel([
+              Animated.timing(opacity, { toValue: 0, duration: 230, useNativeDriver: true }),
+              Animated.timing(scale, { toValue: 0.6, duration: 230, useNativeDriver: true }),
+            ]),
           ]),
         ]),
         Animated.timing(translateY, { toValue: 0, duration: 0, useNativeDriver: true }),
@@ -39,19 +53,20 @@ function FallingSandParticle({ delay, color }: { delay: number; color: string })
     );
     animation.start();
     return () => animation.stop();
-  }, [delay, translateY, opacity]);
+  }, [delay, translateY, opacity, scale]);
 
   return (
     <Animated.View
       style={[
-        styles.sandParticle,
-        {
-          backgroundColor: color,
-          opacity,
-          transform: [{ translateY }],
-        },
+        styles.particleWrapper,
+        { opacity, transform: [{ translateY }, { scale }] },
       ]}
-    />
+    >
+      {/* Glow halo */}
+      <RNView style={styles.particleGlow} />
+      {/* Core dot */}
+      <RNView style={styles.particleCore} />
+    </Animated.View>
   );
 }
 
@@ -65,61 +80,96 @@ export function HourglassView({ lifeData }: HourglassViewProps) {
   const topFillHeight = (percentRemaining / 100) * HALF_HEIGHT;
   const bottomFillHeight = (percentLived / 100) * HALF_HEIGHT;
 
-  const sandColor = colors.tint;
-  const glassColor = colorScheme === 'dark' ? '#2C2C2E' : '#E5E7EB';
+  const glassBg =
+    colorScheme === 'dark' ? 'rgba(10,20,40,0.55)' : 'rgba(235,242,255,0.55)';
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.percentText, { color: colors.text }]}>
-        {percentLived.toFixed(1)}% elapsed
-      </Text>
-
-      <View style={styles.hourglassContainer}>
-        {/* Top half */}
-        <View
-          style={[
-            styles.topHalf,
-            {
-              backgroundColor: glassColor,
-              borderColor: colors.cardBorder,
-            },
-          ]}
-        >
-          <View style={[styles.topFill, { height: topFillHeight, backgroundColor: sandColor }]} />
-        </View>
-
-        {/* Neck */}
-        <View style={[styles.neck, { backgroundColor: colors.cardBorder }]}>
-          {!lifeData.exceededExpectancy && (
-            <>
-              <FallingSandParticle delay={0} color={sandColor} />
-              <FallingSandParticle delay={400} color={sandColor} />
-              <FallingSandParticle delay={800} color={sandColor} />
-            </>
-          )}
-        </View>
-
-        {/* Bottom half */}
-        <View
-          style={[
-            styles.bottomHalf,
-            {
-              backgroundColor: glassColor,
-              borderColor: colors.cardBorder,
-            },
-          ]}
-        >
-          <View style={[styles.bottomFill, { height: bottomFillHeight, backgroundColor: sandColor }]} />
-        </View>
+      {/* Percent text */}
+      <View style={styles.percentRow}>
+        <Text style={[styles.percentNumber, { color: SAND_MID }]}>
+          {percentLived.toFixed(1)}
+        </Text>
+        <Text style={[styles.percentSign, { color: colors.secondaryText }]}>% elapsed</Text>
       </View>
 
+      <View style={styles.hourglassContainer}>
+        {/* Top bulb */}
+        <RNView
+          style={[
+            styles.topHalf,
+            { backgroundColor: glassBg, borderColor: GLASS_BORDER },
+          ]}
+        >
+          {/* Sand fill — two layers for depth */}
+          {topFillHeight > 0 && (
+            <RNView style={[styles.topFill, { height: topFillHeight }]}>
+              {/* Lighter top band */}
+              <RNView
+                style={[
+                  styles.sandLayerTop,
+                  { height: topFillHeight * 0.4, backgroundColor: SAND_TOP },
+                ]}
+              />
+              {/* Richer lower band */}
+              <RNView
+                style={[
+                  styles.sandLayerBottom,
+                  { height: topFillHeight * 0.6, backgroundColor: SAND_MID },
+                ]}
+              />
+            </RNView>
+          )}
+        </RNView>
+
+        {/* Neck */}
+        <RNView style={[styles.neck, { borderColor: GLASS_BORDER }]}>
+          {!lifeData.exceededExpectancy && (
+            <>
+              <GlowParticle delay={0} />
+              <GlowParticle delay={300} />
+              <GlowParticle delay={600} />
+            </>
+          )}
+        </RNView>
+
+        {/* Bottom bulb */}
+        <RNView
+          style={[
+            styles.bottomHalf,
+            { backgroundColor: glassBg, borderColor: GLASS_BORDER },
+          ]}
+        >
+          {bottomFillHeight > 0 && (
+            <RNView style={[styles.bottomFill, { height: bottomFillHeight }]}>
+              {/* Surface sheen */}
+              <RNView
+                style={[
+                  styles.sandSurface,
+                  { height: bottomFillHeight * 0.18, backgroundColor: SAND_TOP },
+                ]}
+              />
+              {/* Body */}
+              <RNView
+                style={[
+                  styles.sandBody,
+                  { height: bottomFillHeight * 0.82, backgroundColor: SAND_BOTTOM },
+                ]}
+              />
+            </RNView>
+          )}
+        </RNView>
+      </View>
+
+      {/* Labels */}
       <View style={styles.labelRow}>
         <View style={styles.labelItem}>
-          <Text style={[styles.labelValue, { color: colors.tint }]}>
+          <Text style={[styles.labelValue, { color: SAND_MID }]}>
             {lifeData.yearsLived}
           </Text>
           <Text style={[styles.labelText, { color: colors.secondaryText }]}>years lived</Text>
         </View>
+        <RNView style={[styles.labelDivider, { backgroundColor: colors.separator }]} />
         <View style={styles.labelItem}>
           <Text style={[styles.labelValue, { color: colors.secondaryText }]}>
             {lifeData.yearsRemaining}
@@ -137,10 +187,20 @@ const styles = StyleSheet.create({
     paddingVertical: Layout.spacing.lg,
     backgroundColor: 'transparent',
   },
-  percentText: {
+  percentRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: Layout.spacing.lg,
+    backgroundColor: 'transparent',
+  },
+  percentNumber: {
     fontSize: Layout.fontSize.heading,
     fontWeight: '700',
-    marginBottom: Layout.spacing.lg,
+  },
+  percentSign: {
+    fontSize: Layout.fontSize.body,
+    fontWeight: '400',
+    marginLeft: 4,
   },
   hourglassContainer: {
     alignItems: 'center',
@@ -150,52 +210,91 @@ const styles = StyleSheet.create({
   topHalf: {
     width: GLASS_WIDTH,
     height: HALF_HEIGHT,
-    borderTopLeftRadius: Layout.borderRadius.md,
-    borderTopRightRadius: Layout.borderRadius.md,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
     borderBottomLeftRadius: GLASS_WIDTH / 2,
     borderBottomRightRadius: GLASS_WIDTH / 2,
     overflow: 'hidden',
     justifyContent: 'flex-end',
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
   topFill: {
     width: '100%',
-    borderTopLeftRadius: GLASS_WIDTH / 4,
-    borderTopRightRadius: GLASS_WIDTH / 4,
+    overflow: 'hidden',
+    borderTopLeftRadius: GLASS_WIDTH / 5,
+    borderTopRightRadius: GLASS_WIDTH / 5,
+    flexDirection: 'column',
+    justifyContent: 'flex-end',
+  },
+  sandLayerTop: {
+    width: '100%',
+  },
+  sandLayerBottom: {
+    width: '100%',
   },
   neck: {
-    width: 8,
+    width: 6,
     height: NECK_HEIGHT,
+    borderLeftWidth: 1.5,
+    borderRightWidth: 1.5,
     alignItems: 'center',
     overflow: 'visible',
+    backgroundColor: 'transparent',
   },
-  sandParticle: {
+  particleWrapper: {
+    position: 'absolute',
+    top: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 10,
+    height: 10,
+  },
+  particleGlow: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: GLOW_COLOR,
+  },
+  particleCore: {
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    position: 'absolute',
-    top: 0,
+    backgroundColor: SAND_TOP,
   },
   bottomHalf: {
     width: GLASS_WIDTH,
     height: HALF_HEIGHT,
-    borderBottomLeftRadius: Layout.borderRadius.md,
-    borderBottomRightRadius: Layout.borderRadius.md,
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
     borderTopLeftRadius: GLASS_WIDTH / 2,
     borderTopRightRadius: GLASS_WIDTH / 2,
     overflow: 'hidden',
     justifyContent: 'flex-end',
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
   bottomFill: {
+    width: '100%',
+    overflow: 'hidden',
+  },
+  sandSurface: {
+    width: '100%',
+  },
+  sandBody: {
     width: '100%',
   },
   labelRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    alignItems: 'center',
+    justifyContent: 'center',
     width: GLASS_WIDTH + Layout.spacing.xxl,
     marginTop: Layout.spacing.lg,
     backgroundColor: 'transparent',
+    gap: Layout.spacing.xl,
+  },
+  labelDivider: {
+    width: 1,
+    height: 32,
   },
   labelItem: {
     alignItems: 'center',
