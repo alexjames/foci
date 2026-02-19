@@ -133,7 +133,7 @@ export interface HomeToolEntry {
 
 // === CHECKLIST SYSTEM ===
 
-export type RecurrenceType = 'daily' | 'specific-days' | 'every-n-days' | 'weekdays' | 'weekends';
+export type RecurrenceType = 'once' | 'daily' | 'specific-days' | 'every-n-days' | 'weekdays' | 'weekends';
 
 export interface ChecklistItem {
   id: string;

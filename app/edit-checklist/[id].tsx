@@ -9,10 +9,12 @@ import {
   Alert,
   Switch,
   useColorScheme,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
 import { RecurrenceType } from '@/src/types';
@@ -28,6 +30,21 @@ const RECURRENCE_OPTIONS: { value: RecurrenceType; label: string }[] = [
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+function formatDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function formatDisplayDate(d: Date): string {
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
 export default function EditChecklistScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -40,38 +57,70 @@ export default function EditChecklistScreen() {
     [id, items]
   );
 
+  // Determine if existing item repeats (anything other than 'once')
+  const existingRepeats = existingItem ? existingItem.recurrence !== 'once' : false;
+
   const [title, setTitle] = useState(existingItem?.title ?? '');
-  const [repeats, setRepeats] = useState(!!existingItem);
+  const [repeats, setRepeats] = useState(existingRepeats);
   const [recurrence, setRecurrence] = useState<RecurrenceType>(
-    existingItem?.recurrence ?? 'daily'
+    existingItem && existingItem.recurrence !== 'once'
+      ? existingItem.recurrence
+      : 'daily'
   );
   const [specificDays, setSpecificDays] = useState<number[]>(
     existingItem?.specificDays ?? []
   );
   const [everyNDays, setEveryNDays] = useState(existingItem?.everyNDays ?? 2);
 
+  // For one-time items: the date to do it
+  const [onceDate, setOnceDate] = useState<Date>(() => {
+    if (existingItem && existingItem.recurrence === 'once') {
+      return new Date(existingItem.startDate);
+    }
+    return new Date();
+  });
+  const [showDatePicker, setShowDatePicker] = useState(Platform.OS === 'ios');
+
   const handleSave = () => {
     const trimmed = title.trim();
     if (!trimmed) return;
 
-    // If repeats is false, use 'daily' but we won't show it
-    const finalRecurrence = repeats ? recurrence : 'daily';
-
-    if (existingItem) {
-      updateItem({
-        ...existingItem,
-        title: trimmed,
-        recurrence: finalRecurrence,
-        specificDays: finalRecurrence === 'specific-days' ? specificDays : undefined,
-        everyNDays: finalRecurrence === 'every-n-days' ? everyNDays : undefined,
-      });
+    if (repeats) {
+      const finalRecurrence = recurrence;
+      if (existingItem) {
+        updateItem({
+          ...existingItem,
+          title: trimmed,
+          recurrence: finalRecurrence,
+          specificDays: finalRecurrence === 'specific-days' ? specificDays : undefined,
+          everyNDays: finalRecurrence === 'every-n-days' ? everyNDays : undefined,
+        });
+      } else {
+        addItem({
+          title: trimmed,
+          recurrence: finalRecurrence,
+          specificDays: finalRecurrence === 'specific-days' ? specificDays : undefined,
+          everyNDays: finalRecurrence === 'every-n-days' ? everyNDays : undefined,
+        });
+      }
     } else {
-      addItem({
-        title: trimmed,
-        recurrence: finalRecurrence,
-        specificDays: finalRecurrence === 'specific-days' ? specificDays : undefined,
-        everyNDays: finalRecurrence === 'every-n-days' ? everyNDays : undefined,
-      });
+      // One-time item
+      if (existingItem) {
+        updateItem({
+          ...existingItem,
+          title: trimmed,
+          recurrence: 'once',
+          startDate: formatDate(onceDate),
+          specificDays: undefined,
+          everyNDays: undefined,
+        });
+      } else {
+        addItem({
+          title: trimmed,
+          recurrence: 'once',
+          startDate: formatDate(onceDate),
+        });
+      }
     }
     router.back();
   };
@@ -138,12 +187,49 @@ export default function EditChecklistScreen() {
           <Text style={[styles.optionLabel, { color: colors.text }]}>Repeats</Text>
           <Switch
             value={repeats}
-            onValueChange={setRepeats}
+            onValueChange={(val) => {
+              setRepeats(val);
+              if (val) setShowDatePicker(false);
+              else setShowDatePicker(Platform.OS === 'ios');
+            }}
             trackColor={{ true: colors.tint }}
           />
         </View>
 
-        {/* Recurrence options - only shown if repeats is true */}
+        {/* One-time date picker (shown when not repeating) */}
+        {!repeats && (
+          <>
+            <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
+              Date
+            </Text>
+            {Platform.OS === 'android' && (
+              <Pressable
+                onPress={() => setShowDatePicker(true)}
+                style={[styles.dateButton, { backgroundColor: colors.cardBackground }]}
+              >
+                <Ionicons name="calendar-outline" size={20} color={colors.tint} />
+                <Text style={[styles.dateButtonText, { color: colors.text }]}>
+                  {formatDisplayDate(onceDate)}
+                </Text>
+              </Pressable>
+            )}
+            {showDatePicker && (
+              <DateTimePicker
+                value={onceDate}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                onChange={(_, selectedDate) => {
+                  if (Platform.OS === 'android') setShowDatePicker(false);
+                  if (selectedDate) setOnceDate(selectedDate);
+                }}
+                themeVariant={colorScheme}
+                style={Platform.OS === 'ios' ? styles.iosDatePicker : undefined}
+              />
+            )}
+          </>
+        )}
+
+        {/* Recurrence options — only when repeating */}
         {repeats && (
           <>
             <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
@@ -271,6 +357,19 @@ const styles = StyleSheet.create({
   },
   optionLabel: {
     fontSize: Layout.fontSize.body,
+  },
+  dateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+    gap: Layout.spacing.sm,
+  },
+  dateButtonText: {
+    fontSize: Layout.fontSize.body,
+  },
+  iosDatePicker: {
+    alignSelf: 'center',
   },
   daysRow: {
     flexDirection: 'row',

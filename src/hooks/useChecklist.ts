@@ -2,11 +2,16 @@ import { useCallback, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { ChecklistItem, RecurrenceType } from '../types';
 
-function isDueOnDate(item: ChecklistItem, date: Date): boolean {
+export function isDueOnDate(item: ChecklistItem, date: Date): boolean {
   const day = date.getDay(); // 0=Sun, 6=Sat
   const startDate = new Date(item.startDate);
 
   switch (item.recurrence) {
+    case 'once': {
+      const sd = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      return sd.getTime() === d.getTime();
+    }
     case 'daily':
       return true;
     case 'weekdays':
@@ -37,12 +42,12 @@ export function useChecklist() {
   const { state, dispatch } = useAppContext();
 
   const addItem = useCallback(
-    (item: Omit<ChecklistItem, 'id' | 'createdAt' | 'startDate'>) => {
+    (item: Omit<ChecklistItem, 'id' | 'createdAt' | 'startDate'> & { startDate?: string }) => {
       const now = new Date().toISOString();
       const newItem: ChecklistItem = {
         ...item,
         id: `checklist-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        startDate: formatDate(new Date()),
+        startDate: item.startDate ?? formatDate(new Date()),
         createdAt: now,
       };
       dispatch({ type: 'ADD_CHECKLIST_ITEM', payload: newItem });
