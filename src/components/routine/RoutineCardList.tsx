@@ -15,12 +15,12 @@ import DraggableFlatList, {
 import { Swipeable } from 'react-native-gesture-handler';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
-import { RoutineConfig } from '@/src/types';
+import { RoutinesConfig, Routine } from '@/src/types';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
 import { getPresetById } from '@/src/constants/routineCards';
 
 interface RoutineCardListProps {
-  toolId: 'morning-routine' | 'evening-routine';
+  routineId: string;
   onPlay: () => void;
 }
 
@@ -30,10 +30,10 @@ interface ResolvedCard {
   description: string;
 }
 
-function resolveCard(cardId: string, config: RoutineConfig): ResolvedCard | null {
+function resolveCard(cardId: string, routine: Routine): ResolvedCard | null {
   const preset = getPresetById(cardId);
   if (preset) return { id: preset.id, title: preset.title, description: preset.description };
-  const custom = config.customCards.find((c) => c.id === cardId);
+  const custom = routine.customCards.find((c) => c.id === cardId);
   if (custom) return { id: custom.id, title: custom.title, description: custom.description };
   return null;
 }
@@ -110,45 +110,51 @@ function SwipeableCard({
   );
 }
 
-export function RoutineCardList({ toolId, onPlay }: RoutineCardListProps) {
+export function RoutineCardList({ routineId, onPlay }: RoutineCardListProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
-  const { config, setConfig } = useToolConfig<RoutineConfig>(toolId);
+  const { config, setConfig } = useToolConfig<RoutinesConfig>('routines');
 
-  const defaultConfig: RoutineConfig = {
-    toolId,
-    orderedCards: [],
-    customCards: [],
-    notificationEnabled: false,
-  };
-  const currentConfig = config ?? defaultConfig;
+  const routine = config?.routines.find((r) => r.id === routineId);
 
   const cards = useMemo(() => {
-    return currentConfig.orderedCards
-      .map((id) => resolveCard(id, currentConfig))
+    if (!routine) return [];
+    return routine.orderedCards
+      .map((id) => resolveCard(id, routine))
       .filter((c): c is ResolvedCard => c !== null);
-  }, [currentConfig]);
+  }, [routine]);
 
   const handleRemove = useCallback(
     (cardId: string) => {
+      if (!routine || !config) return;
       setConfig({
-        ...currentConfig,
-        orderedCards: currentConfig.orderedCards.filter((id) => id !== cardId),
-        customCards: currentConfig.customCards.filter((c) => c.id !== cardId),
+        ...config,
+        routines: config.routines.map((r) =>
+          r.id === routineId
+            ? {
+                ...r,
+                orderedCards: r.orderedCards.filter((id) => id !== cardId),
+                customCards: r.customCards.filter((c) => c.id !== cardId),
+              }
+            : r
+        ),
       });
     },
-    [currentConfig, setConfig]
+    [routine, config, routineId, setConfig]
   );
 
   const handleReorder = useCallback(
     (data: ResolvedCard[]) => {
+      if (!routine || !config) return;
       setConfig({
-        ...currentConfig,
-        orderedCards: data.map((c) => c.id),
+        ...config,
+        routines: config.routines.map((r) =>
+          r.id === routineId ? { ...r, orderedCards: data.map((c) => c.id) } : r
+        ),
       });
     },
-    [currentConfig, setConfig]
+    [routine, config, routineId, setConfig]
   );
 
   const renderItem = useCallback(
@@ -171,7 +177,7 @@ export function RoutineCardList({ toolId, onPlay }: RoutineCardListProps) {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.emptyState}>
           <Ionicons
-            name={toolId === 'morning-routine' ? 'sunny-outline' : 'moon-outline'}
+            name={(routine?.icon ?? 'repeat-outline') as any}
             size={64}
             color={colors.secondaryText}
           />
@@ -182,7 +188,7 @@ export function RoutineCardList({ toolId, onPlay }: RoutineCardListProps) {
         </View>
         <View style={styles.fabContainer}>
           <Pressable
-            onPress={() => router.push(`/routine-cards/${toolId}` as any)}
+            onPress={() => router.push(`/routine-cards/${routineId}` as any)}
             style={styles.fab}
           >
             <Ionicons name="add" size={28} color="#fff" />
@@ -203,7 +209,7 @@ export function RoutineCardList({ toolId, onPlay }: RoutineCardListProps) {
       />
       <View style={styles.fabContainer}>
         <Pressable
-          onPress={() => router.push(`/routine-cards/${toolId}` as any)}
+          onPress={() => router.push(`/routine-cards/${routineId}` as any)}
           style={[styles.fabSecondary, { borderColor: colors.tint }]}
         >
           <Ionicons name="add" size={24} color={colors.tint} />

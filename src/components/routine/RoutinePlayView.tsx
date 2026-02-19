@@ -13,14 +13,14 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
-import { RoutineConfig } from '@/src/types';
+import { RoutinesConfig } from '@/src/types';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
 import { getPresetById } from '@/src/constants/routineCards';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface RoutinePlayViewProps {
-  toolId: 'morning-routine' | 'evening-routine';
+  routineId: string;
   onComplete: () => void;
 }
 
@@ -31,21 +31,23 @@ interface PlayCard {
   type: 'card' | 'done';
 }
 
-export function RoutinePlayView({ toolId, onComplete }: RoutinePlayViewProps) {
+export function RoutinePlayView({ routineId, onComplete }: RoutinePlayViewProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
-  const { config } = useToolConfig<RoutineConfig>(toolId);
+  const { config } = useToolConfig<RoutinesConfig>('routines');
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList<PlayCard>>(null);
 
-  const playCards: PlayCard[] = useMemo(() => {
-    if (!config) return [{ id: 'done', title: '', description: '', type: 'done' }];
+  const routine = config?.routines.find((r) => r.id === routineId);
 
-    const resolved: PlayCard[] = config.orderedCards
+  const playCards: PlayCard[] = useMemo(() => {
+    if (!routine) return [{ id: 'done', title: '', description: '', type: 'done' }];
+
+    const resolved: PlayCard[] = routine.orderedCards
       .map((cardId) => {
         const preset = getPresetById(cardId);
         if (preset) return { id: preset.id, title: preset.title, description: preset.description, type: 'card' as const };
-        const custom = config.customCards.find((c) => c.id === cardId);
+        const custom = routine.customCards.find((c) => c.id === cardId);
         if (custom) return { id: custom.id, title: custom.title, description: custom.description, type: 'card' as const };
         return null;
       })
@@ -53,9 +55,9 @@ export function RoutinePlayView({ toolId, onComplete }: RoutinePlayViewProps) {
 
     resolved.push({ id: 'done', title: '', description: '', type: 'done' });
     return resolved;
-  }, [config]);
+  }, [routine]);
 
-  const totalCards = playCards.length - 1; // Exclude done card from count
+  const totalCards = playCards.length - 1;
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken<PlayCard>[] }) => {
@@ -81,14 +83,11 @@ export function RoutinePlayView({ toolId, onComplete }: RoutinePlayViewProps) {
             <Ionicons name="checkmark-circle" size={80} color={colors.tint} />
             <Text style={[styles.doneTitle, { color: colors.text }]}>Routine Complete</Text>
             <Text style={[styles.doneMessage, { color: colors.secondaryText }]}>
-              Great job finishing your {toolId === 'morning-routine' ? 'morning' : 'evening'} routine.
+              Great job finishing your {routine?.title ?? ''} routine.
             </Text>
             <Pressable
               onPress={handleDone}
-              style={({ pressed }) => [
-                styles.doneButton,
-                { opacity: pressed ? 0.8 : 1 },
-              ]}
+              style={({ pressed }) => [styles.doneButton, { opacity: pressed ? 0.8 : 1 }]}
             >
               <Text style={styles.doneButtonText}>Done</Text>
             </Pressable>
@@ -108,7 +107,7 @@ export function RoutinePlayView({ toolId, onComplete }: RoutinePlayViewProps) {
         </View>
       );
     },
-    [colors, toolId, handleDone]
+    [colors, routine, handleDone]
   );
 
   return (
@@ -118,9 +117,7 @@ export function RoutinePlayView({ toolId, onComplete }: RoutinePlayViewProps) {
           <Ionicons name="close" size={24} color={colors.tint} />
         </Pressable>
         <Text style={[styles.progress, { color: colors.secondaryText }]}>
-          {currentIndex < totalCards
-            ? `${currentIndex + 1} of ${totalCards}`
-            : ''}
+          {currentIndex < totalCards ? `${currentIndex + 1} of ${totalCards}` : ''}
         </Text>
         <View style={{ width: 24 }} />
       </View>

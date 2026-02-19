@@ -10,7 +10,6 @@ import {
   BreathingConfig,
   FocusTimerConfig,
   DeadlineTrackerConfig,
-  RoutineConfig,
   StreakTrackerConfig,
 } from '@/src/types';
 import { TOOL_REGISTRY, BREATHING_PRESETS, FOCUS_TIMER_PRESETS } from '@/src/constants/tools';
@@ -197,23 +196,24 @@ function TallyCounterPreview() {
   );
 }
 
-function RoutinePreview({ toolId }: { toolId: 'morning-routine' | 'evening-routine' }) {
-  const { config } = useToolConfig<RoutineConfig>(toolId);
+function RoutinesPreview() {
+  const { config } = useToolConfig<import('@/src/types').RoutinesConfig>('routines');
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
-  const cardCount = config?.orderedCards?.length ?? 0;
+  const routines = config?.routines ?? [];
 
-  if (cardCount === 0) {
+  if (routines.length === 0) {
     return (
       <Text style={[styles.previewText, { color: colors.secondaryText }]}>
-        Tap to build your routine
+        Tap to create your first routine
       </Text>
     );
   }
 
+  const totalSteps = routines.reduce((sum, r) => sum + r.orderedCards.length, 0);
   return (
     <Text style={[styles.previewText, { color: colors.secondaryText }]}>
-      {cardCount} step{cardCount !== 1 ? 's' : ''} in your routine
+      {routines.length} routine{routines.length !== 1 ? 's' : ''} · {totalSteps} total step{totalSteps !== 1 ? 's' : ''}
     </Text>
   );
 }
@@ -234,8 +234,7 @@ export function HomeToolCard({ toolId, drag, isActive }: HomeToolCardProps) {
       case 'focus-timer': return <FocusTimerPreview />;
       case 'deadline-tracker': return <DeadlineTrackerPreview />;
       case 'streak-tracker': return <StreakTrackerPreview />;
-      case 'morning-routine': return <RoutinePreview toolId="morning-routine" />;
-      case 'evening-routine': return <RoutinePreview toolId="evening-routine" />;
+      case 'routines': return <RoutinesPreview />;
       case 'tally-counter': return <TallyCounterPreview />;
     }
   };

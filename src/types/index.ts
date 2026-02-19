@@ -1,6 +1,6 @@
 // === TOOL SYSTEM ===
 
-export type ToolId = 'memento-mori' | 'goals' | 'affirmations' | 'breathing' | 'focus-timer' | 'deadline-tracker' | 'morning-routine' | 'evening-routine' | 'streak-tracker' | 'tally-counter';
+export type ToolId = 'memento-mori' | 'goals' | 'affirmations' | 'breathing' | 'focus-timer' | 'deadline-tracker' | 'morning-routine' | 'evening-routine' | 'streak-tracker' | 'tally-counter' | 'routines';
 
 export interface ToolDefinition {
   id: ToolId;
@@ -137,7 +137,23 @@ export interface RoutineConfig {
   notificationTime?: { hour: number; minute: number };
 }
 
-export type ToolConfig = MementoMoriConfig | GoalsConfig | AffirmationsConfig | BreathingConfig | FocusTimerConfig | DeadlineTrackerConfig | StreakTrackerConfig | RoutineConfig | TallyCounterConfig;
+export interface Routine {
+  id: string;
+  title: string;
+  icon: string;
+  orderedCards: string[];
+  customCards: RoutineCustomCard[];
+  notificationEnabled: boolean;
+  notificationTime?: { hour: number; minute: number };
+  createdAt: string;
+}
+
+export interface RoutinesConfig {
+  toolId: 'routines';
+  routines: Routine[];
+}
+
+export type ToolConfig = MementoMoriConfig | GoalsConfig | AffirmationsConfig | BreathingConfig | FocusTimerConfig | DeadlineTrackerConfig | StreakTrackerConfig | RoutineConfig | TallyCounterConfig | RoutinesConfig;
 
 export interface HomeToolEntry {
   toolId: ToolId;

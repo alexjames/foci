@@ -58,20 +58,12 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
       'Track your daily streaks and build consistency. See how many days you\'ve kept each habit alive.',
   },
   {
-    id: 'morning-routine',
-    name: 'Morning Routine',
-    tagline: 'Start your day with intention',
-    icon: 'sunny-outline',
+    id: 'routines',
+    name: 'Routines',
+    tagline: 'Build your daily rituals',
+    icon: 'repeat-outline',
     description:
-      'Build your ideal morning routine from preset and custom cards. Play through them step by step each morning.',
-  },
-  {
-    id: 'evening-routine',
-    name: 'Evening Routine',
-    tagline: 'End your day mindfully',
-    icon: 'moon-outline',
-    description:
-      'Wind down with a guided evening routine. Customize your steps and play through them each night.',
+      'Create up to 5 custom routines with your own steps. Play through them one card at a time.',
   },
   {
     id: 'tally-counter',
@@ -132,6 +124,13 @@ export const DEADLINE_COLORS = [
   { id: 'lilac',     light: '#C4A8E0', dark: '#C4A8E0', label: 'Lilac' },
   { id: 'pearl',     light: '#E0DEDD', dark: '#E0DEDD', label: 'Pearl' },
   { id: 'pebble',    light: '#9E9E9E', dark: '#9E9E9E', label: 'Pebble' },
+];
+
+export const ROUTINE_ICONS = [
+  'sunny-outline', 'moon-outline', 'flame-outline', 'fitness-outline',
+  'book-outline', 'cafe-outline', 'bicycle-outline', 'barbell-outline',
+  'leaf-outline', 'heart-outline', 'water-outline', 'musical-notes-outline',
+  'walk-outline', 'bed-outline', 'briefcase-outline', 'school-outline',
 ];
 
 export const DEADLINE_REMINDER_OPTIONS: { value: DeadlineReminderType; label: string }[] = [

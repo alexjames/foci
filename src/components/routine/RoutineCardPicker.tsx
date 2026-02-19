@@ -13,57 +13,53 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
-import { RoutineConfig, RoutineCustomCard } from '@/src/types';
+import { RoutinesConfig, RoutineCustomCard } from '@/src/types';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
-import { getPresetsForRoutine } from '@/src/constants/routineCards';
+import { ROUTINE_PRESET_CARDS } from '@/src/constants/routineCards';
 
 interface RoutineCardPickerProps {
-  toolId: 'morning-routine' | 'evening-routine';
+  routineId: string;
 }
 
-export function RoutineCardPicker({ toolId }: RoutineCardPickerProps) {
+export function RoutineCardPicker({ routineId }: RoutineCardPickerProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
-  const routineType = toolId === 'morning-routine' ? 'morning' : 'evening';
-  const { config, setConfig } = useToolConfig<RoutineConfig>(toolId);
+  const { config, setConfig } = useToolConfig<RoutinesConfig>('routines');
 
-  const defaultConfig: RoutineConfig = {
-    toolId,
-    orderedCards: [],
-    customCards: [],
-    notificationEnabled: false,
-  };
-  const currentConfig = config ?? defaultConfig;
+  const routine = config?.routines.find((r) => r.id === routineId);
 
   const [customTitle, setCustomTitle] = useState('');
   const [customDescription, setCustomDescription] = useState('');
   const [showCustomForm, setShowCustomForm] = useState(false);
 
-  const presets = useMemo(() => getPresetsForRoutine(routineType), [routineType]);
-  const routinePresets = useMemo(() => presets.filter((p) => p.category === routineType), [presets, routineType]);
-  const generalPresets = useMemo(() => presets.filter((p) => p.category === 'general'), [presets]);
+  const morningPresets = useMemo(() => ROUTINE_PRESET_CARDS.filter((p) => p.category === 'morning'), []);
+  const eveningPresets = useMemo(() => ROUTINE_PRESET_CARDS.filter((p) => p.category === 'evening'), []);
+  const generalPresets = useMemo(() => ROUTINE_PRESET_CARDS.filter((p) => p.category === 'general'), []);
 
-  const selectedSet = useMemo(() => new Set(currentConfig.orderedCards), [currentConfig.orderedCards]);
+  const selectedSet = useMemo(
+    () => new Set(routine?.orderedCards ?? []),
+    [routine?.orderedCards]
+  );
 
   const togglePreset = useCallback(
     async (presetId: string) => {
+      if (!routine || !config) return;
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      if (selectedSet.has(presetId)) {
-        setConfig({
-          ...currentConfig,
-          orderedCards: currentConfig.orderedCards.filter((id) => id !== presetId),
-        });
-      } else {
-        setConfig({
-          ...currentConfig,
-          orderedCards: [...currentConfig.orderedCards, presetId],
-        });
-      }
+      const newOrderedCards = selectedSet.has(presetId)
+        ? routine.orderedCards.filter((id) => id !== presetId)
+        : [...routine.orderedCards, presetId];
+      setConfig({
+        ...config,
+        routines: config.routines.map((r) =>
+          r.id === routineId ? { ...r, orderedCards: newOrderedCards } : r
+        ),
+      });
     },
-    [currentConfig, selectedSet, setConfig]
+    [routine, config, routineId, selectedSet, setConfig]
   );
 
   const handleAddCustom = useCallback(async () => {
+    if (!routine || !config) return;
     const title = customTitle.trim();
     const description = customDescription.trim();
     if (!title) {
@@ -79,16 +75,21 @@ export function RoutineCardPicker({ toolId }: RoutineCardPickerProps) {
       createdAt: new Date().toISOString(),
     };
     setConfig({
-      ...currentConfig,
-      orderedCards: [...currentConfig.orderedCards, id],
-      customCards: [...currentConfig.customCards, newCard],
+      ...config,
+      routines: config.routines.map((r) =>
+        r.id === routineId
+          ? {
+              ...r,
+              orderedCards: [...r.orderedCards, id],
+              customCards: [...r.customCards, newCard],
+            }
+          : r
+      ),
     });
     setCustomTitle('');
     setCustomDescription('');
     setShowCustomForm(false);
-  }, [customTitle, customDescription, currentConfig, setConfig]);
-
-  const categoryLabel = routineType === 'morning' ? 'Morning' : 'Evening';
+  }, [customTitle, customDescription, routine, config, routineId, setConfig]);
 
   return (
     <ScrollView
@@ -138,10 +139,10 @@ export function RoutineCardPicker({ toolId }: RoutineCardPickerProps) {
       </View>
 
       {/* Custom cards already added */}
-      {currentConfig.customCards.length > 0 && (
+      {(routine?.customCards.length ?? 0) > 0 && (
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Custom Cards</Text>
-          {currentConfig.customCards.map((card) => (
+          {routine!.customCards.map((card) => (
             <Pressable
               key={card.id}
               onPress={() => togglePreset(card.id)}
@@ -163,10 +164,34 @@ export function RoutineCardPicker({ toolId }: RoutineCardPickerProps) {
         </View>
       )}
 
-      {/* Routine-specific presets */}
+      {/* Morning presets */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>{categoryLabel}</Text>
-        {routinePresets.map((preset) => (
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Morning</Text>
+        {morningPresets.map((preset) => (
+          <Pressable
+            key={preset.id}
+            onPress={() => togglePreset(preset.id)}
+            style={[styles.presetCard, { backgroundColor: colors.cardBackground }]}
+          >
+            <View style={styles.presetContent}>
+              <Text style={[styles.presetTitle, { color: colors.text }]}>{preset.title}</Text>
+              <Text style={[styles.presetDescription, { color: colors.secondaryText }]} numberOfLines={2}>
+                {preset.description}
+              </Text>
+            </View>
+            <Ionicons
+              name={selectedSet.has(preset.id) ? 'checkbox' : 'square-outline'}
+              size={24}
+              color={selectedSet.has(preset.id) ? colors.tint : colors.secondaryText}
+            />
+          </Pressable>
+        ))}
+      </View>
+
+      {/* Evening presets */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Evening</Text>
+        {eveningPresets.map((preset) => (
           <Pressable
             key={preset.id}
             onPress={() => togglePreset(preset.id)}

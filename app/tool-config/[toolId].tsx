@@ -77,6 +77,10 @@ function getDefaultConfig(toolId: ToolId): ToolConfig {
         customCards: [],
         notificationEnabled: false,
       };
+    case 'tally-counter':
+      return { toolId: 'tally-counter', counters: [] };
+    case 'routines':
+      return { toolId: 'routines', routines: [] };
   }
 }
 

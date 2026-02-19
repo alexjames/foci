@@ -8,7 +8,8 @@ import { Layout } from '@/src/constants/Layout';
 import { RoutineCardPicker } from '@/src/components/routine/RoutineCardPicker';
 
 export default function RoutineCardPickerScreen() {
-  const { toolId } = useLocalSearchParams<{ toolId: string }>();
+  // The dynamic segment is named [toolId] for route compatibility but now carries a routineId
+  const { toolId: routineId } = useLocalSearchParams<{ toolId: string }>();
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
@@ -22,7 +23,7 @@ export default function RoutineCardPickerScreen() {
         <Text style={[styles.headerTitle, { color: colors.text }]}>Add Cards</Text>
         <View style={{ width: 24 }} />
       </View>
-      <RoutineCardPicker toolId={toolId as 'morning-routine' | 'evening-routine'} />
+      <RoutineCardPicker routineId={routineId} />
     </SafeAreaView>
   );
 }

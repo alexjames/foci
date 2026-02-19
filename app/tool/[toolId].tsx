@@ -58,9 +58,8 @@ import { TallyCounterList } from '@/src/components/tally-counter/TallyCounterLis
 // Streak Tracker imports
 import { StreakTrackerList } from '@/src/components/streak-tracker/StreakTrackerList';
 
-// Routine imports
-import { RoutineCardList } from '@/src/components/routine/RoutineCardList';
-import { RoutinePlayView } from '@/src/components/routine/RoutinePlayView';
+// Routines import
+import { RoutineList } from '@/src/components/routine/RoutineList';
 
 function MementoView() {
   const { config, setConfig } = useToolConfig<MementoMoriConfig>('memento-mori');
@@ -203,13 +202,8 @@ function TallyCounterView() {
   return <TallyCounterList />;
 }
 
-function RoutineView({ toolId }: { toolId: 'morning-routine' | 'evening-routine' }) {
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  if (isPlaying) {
-    return <RoutinePlayView toolId={toolId} onComplete={() => setIsPlaying(false)} />;
-  }
-  return <RoutineCardList toolId={toolId} onPlay={() => setIsPlaying(true)} />;
+function RoutinesView() {
+  return <RoutineList />;
 }
 
 export default function ToolScreen() {
@@ -228,8 +222,7 @@ export default function ToolScreen() {
       case 'focus-timer': return <FocusTimerView />;
       case 'deadline-tracker': return <DeadlineTrackerView />;
       case 'streak-tracker': return <StreakTrackerView />;
-      case 'morning-routine': return <RoutineView toolId="morning-routine" />;
-      case 'evening-routine': return <RoutineView toolId="evening-routine" />;
+      case 'routines': return <RoutinesView />;
       case 'tally-counter': return <TallyCounterView />;
       default: return <Text style={{ color: colors.text }}>Unknown tool</Text>;
     }
