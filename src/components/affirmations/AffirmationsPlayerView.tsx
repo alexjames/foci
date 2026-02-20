@@ -9,44 +9,41 @@ import {
 } from 'react-native';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
-import { MOTIVATIONAL_QUOTES, Quote } from '@/src/constants/quotes';
 
-function QuoteItem({
-  quote,
+function AffirmationPage({
+  text,
   colors,
   height,
 }: {
-  quote: Quote;
+  text: string;
   colors: typeof Colors.light;
   height: number;
 }) {
   return (
     <View style={[styles.page, { height }]}>
-      <View style={styles.quoteContainer}>
-        <Text style={[styles.quoteText, { color: colors.text }]}>{quote.text}</Text>
-        <View style={[styles.divider, { backgroundColor: colors.tint }]} />
-        <Text style={[styles.authorText, { color: colors.secondaryText }]}>— {quote.author}</Text>
+      <View style={styles.textContainer}>
+        <Text style={[styles.affirmationText, { color: colors.text }]}>{text}</Text>
       </View>
     </View>
   );
 }
 
-export function QuotesView() {
+export function AffirmationsPlayerView({ items }: { items: string[] }) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const [containerHeight, setContainerHeight] = useState(0);
   const [hasScrolled, setHasScrolled] = useState(false);
-  const flatListRef = useRef<FlatList<Quote>>(null);
+  const flatListRef = useRef<FlatList<string>>(null);
   const hintOpacity = useRef(new Animated.Value(1)).current;
 
   const shuffled = useMemo(() => {
-    const arr = [...MOTIVATIONAL_QUOTES];
+    const arr = [...items];
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
-  }, []);
+  }, [items]);
 
   useEffect(() => {
     if (hasScrolled) {
@@ -57,6 +54,8 @@ export function QuotesView() {
       }).start();
     }
   }, [hasScrolled, hintOpacity]);
+
+  const showHint = containerHeight > 0 && shuffled.length > 1;
 
   return (
     <View
@@ -69,7 +68,7 @@ export function QuotesView() {
           data={shuffled}
           keyExtractor={(_, index) => index.toString()}
           renderItem={({ item }) => (
-            <QuoteItem quote={item} colors={colors} height={containerHeight} />
+            <AffirmationPage text={item} colors={colors} height={containerHeight} />
           )}
           pagingEnabled
           showsVerticalScrollIndicator={false}
@@ -82,7 +81,7 @@ export function QuotesView() {
         />
       )}
 
-      {containerHeight > 0 && (
+      {showHint && (
         <Animated.View style={[styles.hintRow, { opacity: hintOpacity }]}>
           <Text style={[styles.hintCaret, { color: colors.secondaryText }]}>^</Text>
           <Text style={[styles.hintText, { color: colors.secondaryText }]}>Swipe up for more</Text>
@@ -101,29 +100,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Layout.spacing.xl,
   },
-  quoteContainer: {
+  textContainer: {
     alignItems: 'center',
     maxWidth: 340,
   },
-  quoteText: {
-    fontSize: 22,
-    lineHeight: 34,
+  affirmationText: {
+    fontSize: 24,
+    lineHeight: 36,
     fontWeight: '400',
     textAlign: 'center',
     letterSpacing: 0.2,
-  },
-  divider: {
-    width: 40,
-    height: 2,
-    borderRadius: 1,
-    marginTop: Layout.spacing.lg,
-    marginBottom: Layout.spacing.md,
-    opacity: 0.5,
-  },
-  authorText: {
-    fontSize: Layout.fontSize.body,
-    fontWeight: '500',
-    textAlign: 'center',
     fontStyle: 'italic',
   },
   hintRow: {

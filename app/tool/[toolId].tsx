@@ -48,6 +48,8 @@ import { FocusTimerSession } from '@/src/components/focus-timer/FocusTimerSessio
 
 // Affirmation imports
 import { AffirmationsList } from '@/src/components/affirmations/AffirmationsList';
+import { AffirmationsPlayerView } from '@/src/components/affirmations/AffirmationsPlayerView';
+import { AFFIRMATION_CATEGORIES } from '@/src/constants/affirmations';
 
 // Deadline Tracker imports
 import { DeadlineTrackerList, SortMode } from '@/src/components/deadline-tracker/DeadlineTrackerList';
@@ -181,8 +183,19 @@ function GoalsView() {
   );
 }
 
-function AffirmationsView() {
-  return <AffirmationsList />;
+function AffirmationsView({ playing, onPlay, onClosePlayer }: { playing: boolean; onPlay: () => void; onClosePlayer: () => void }) {
+  const { config } = useToolConfig<AffirmationsConfig>('affirmations');
+  const selectedCategories = config?.selectedCategories ?? [];
+  const customItems = (config?.affirmations ?? []).map((a) => a.text);
+  const categoryItems = AFFIRMATION_CATEGORIES
+    .filter((cat) => selectedCategories.includes(cat.id))
+    .flatMap((cat) => cat.items);
+  const allItems = [...categoryItems, ...customItems];
+
+  if (playing) {
+    return <AffirmationsPlayerView items={allItems} />;
+  }
+  return <AffirmationsList onPlay={onPlay} />;
 }
 
 function BreathingView() {
@@ -227,6 +240,7 @@ export default function ToolScreen() {
   const colors = Colors[colorScheme];
   const tool = TOOL_REGISTRY.find((t) => t.id === toolId);
   const [sortMode, setSortMode] = useState<SortMode>('manual');
+  const [affirmationsPlaying, setAffirmationsPlaying] = useState(false);
 
   const cycleSort = () => {
     setSortMode((prev) => {
@@ -236,12 +250,19 @@ export default function ToolScreen() {
   };
 
   const isDeadlineTracker = toolId === 'deadline-tracker';
+  const isAffirmations = toolId === 'affirmations';
 
   const renderTool = () => {
     switch (toolId as ToolId) {
       case 'memento-mori': return <MementoView />;
       case 'goals': return <GoalsView />;
-      case 'affirmations': return <AffirmationsView />;
+      case 'affirmations': return (
+        <AffirmationsView
+          playing={affirmationsPlaying}
+          onPlay={() => setAffirmationsPlaying(true)}
+          onClosePlayer={() => setAffirmationsPlaying(false)}
+        />
+      );
       case 'breathing': return <BreathingView />;
       case 'focus-timer': return <FocusTimerView />;
       case 'deadline-tracker': return <DeadlineTrackerView sortMode={sortMode} />;
@@ -256,7 +277,16 @@ export default function ToolScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.separator }]}>
-        <Pressable onPress={() => router.back()} hitSlop={8}>
+        <Pressable
+          onPress={() => {
+            if (isAffirmations && affirmationsPlaying) {
+              setAffirmationsPlaying(false);
+            } else {
+              router.back();
+            }
+          }}
+          hitSlop={8}
+        >
           <Ionicons name="chevron-back" size={24} color={colors.tint} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.text }]}>

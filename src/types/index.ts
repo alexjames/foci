@@ -27,6 +27,7 @@ export interface GoalsConfig {
 export interface AffirmationsConfig {
   toolId: 'affirmations';
   affirmations: Affirmation[];
+  selectedCategories: string[];
   notificationEnabled: boolean;
   notificationTime?: { hour: number; minute: number };
 }
