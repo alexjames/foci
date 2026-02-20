@@ -343,7 +343,7 @@ function DeadlineDetailSheet({
         {/* Complete button */}
         <Pressable
           onPress={handleComplete}
-          style={({ pressed }) => [styles.completeButton, { opacity: pressed ? 0.8 : 1 }]}
+          style={({ pressed }) => [styles.completeButton, { backgroundColor: accentColor, opacity: pressed ? 0.8 : 1 }]}
         >
           <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
           <Text style={styles.completeButtonText}>Mark as Complete</Text>
@@ -359,7 +359,9 @@ const DEFAULT_CONFIG: DeadlineTrackerConfig = {
   notificationEnabled: false,
 };
 
-export function DeadlineTrackerList() {
+export type SortMode = 'manual' | 'date' | 'name';
+
+export function DeadlineTrackerList({ sortMode = 'manual' }: { sortMode?: SortMode }) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
@@ -368,6 +370,16 @@ export function DeadlineTrackerList() {
   const [isDragging, setIsDragging] = useState(false);
 
   const deadlines = config?.deadlines ?? [];
+
+  const sortedDeadlines = React.useMemo(() => {
+    if (sortMode === 'date') {
+      return [...deadlines].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }
+    if (sortMode === 'name') {
+      return [...deadlines].sort((a, b) => a.title.localeCompare(b.title));
+    }
+    return deadlines;
+  }, [deadlines, sortMode]);
   const canAdd = deadlines.length < 10;
 
   const selectedDeadline = selectedId ? deadlines.find((d) => d.id === selectedId) ?? null : null;
@@ -453,12 +465,12 @@ export function DeadlineTrackerList() {
         </View>
       ) : (
         <DraggableFlatList
-          data={deadlines}
+          data={sortedDeadlines}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           onDragEnd={handleDragEnd}
           contentContainerStyle={styles.list}
-          activationDistance={1}
+          activationDistance={sortMode === 'manual' ? 1 : 999}
         />
       )}
       {!canAdd && deadlines.length > 0 && (
@@ -559,6 +571,7 @@ const styles = StyleSheet.create({
   },
   cardRight: {
     alignItems: 'center',
+    minWidth: 50,
   },
   daysNumber: {
     fontSize: Layout.fontSize.title,
@@ -725,5 +738,12 @@ const styles = StyleSheet.create({
     gap: 2,
     marginTop: 4,
     opacity: 0.6,
+  },
+  sortControl: {
+    position: 'absolute',
+    top: Layout.spacing.sm,
+    right: Layout.spacing.md,
+    zIndex: 10,
+    padding: Layout.spacing.xs,
   },
 });

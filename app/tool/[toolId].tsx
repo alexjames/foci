@@ -50,7 +50,7 @@ import { FocusTimerSession } from '@/src/components/focus-timer/FocusTimerSessio
 import { AffirmationsList } from '@/src/components/affirmations/AffirmationsList';
 
 // Deadline Tracker imports
-import { DeadlineTrackerList } from '@/src/components/deadline-tracker/DeadlineTrackerList';
+import { DeadlineTrackerList, SortMode } from '@/src/components/deadline-tracker/DeadlineTrackerList';
 
 // Tally Counter imports
 import { TallyCounterList } from '@/src/components/tally-counter/TallyCounterList';
@@ -193,8 +193,8 @@ function FocusTimerView() {
   return <FocusTimerSession />;
 }
 
-function DeadlineTrackerView() {
-  return <DeadlineTrackerList />;
+function DeadlineTrackerView({ sortMode }: { sortMode: SortMode }) {
+  return <DeadlineTrackerList sortMode={sortMode} />;
 }
 
 function StreakTrackerView() {
@@ -213,12 +213,29 @@ function MotivationalQuotesView() {
   return <QuotesView />;
 }
 
+const SORT_MODES: SortMode[] = ['manual', 'date', 'name'];
+const SORT_ICONS: Record<SortMode, string> = {
+  manual: 'reorder-four-outline',
+  date: 'calendar-outline',
+  name: 'text-outline',
+};
+
 export default function ToolScreen() {
   const { toolId } = useLocalSearchParams<{ toolId: string }>();
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const tool = TOOL_REGISTRY.find((t) => t.id === toolId);
+  const [sortMode, setSortMode] = useState<SortMode>('manual');
+
+  const cycleSort = () => {
+    setSortMode((prev) => {
+      const idx = SORT_MODES.indexOf(prev);
+      return SORT_MODES[(idx + 1) % SORT_MODES.length];
+    });
+  };
+
+  const isDeadlineTracker = toolId === 'deadline-tracker';
 
   const renderTool = () => {
     switch (toolId as ToolId) {
@@ -227,7 +244,7 @@ export default function ToolScreen() {
       case 'affirmations': return <AffirmationsView />;
       case 'breathing': return <BreathingView />;
       case 'focus-timer': return <FocusTimerView />;
-      case 'deadline-tracker': return <DeadlineTrackerView />;
+      case 'deadline-tracker': return <DeadlineTrackerView sortMode={sortMode} />;
       case 'streak-tracker': return <StreakTrackerView />;
       case 'routines': return <RoutinesView />;
       case 'tally-counter': return <TallyCounterView />;
@@ -245,7 +262,17 @@ export default function ToolScreen() {
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           {tool?.name ?? 'Tool'}
         </Text>
-        <View style={{ width: 24 }} />
+        {isDeadlineTracker ? (
+          <Pressable onPress={cycleSort} hitSlop={8}>
+            <Ionicons
+              name={SORT_ICONS[sortMode] as any}
+              size={20}
+              color={colors.text}
+            />
+          </Pressable>
+        ) : (
+          <View style={{ width: 24 }} />
+        )}
       </View>
       <View style={{ flex: 1 }}>{renderTool()}</View>
     </SafeAreaView>
