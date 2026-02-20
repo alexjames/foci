@@ -41,7 +41,7 @@ export default function TabLayout() {
         options={{
           title: 'Toolbox',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="apps-outline" size={size} color={color} />
+            <Ionicons name="briefcase-outline" size={size} color={color} />
           ),
         }}
       />

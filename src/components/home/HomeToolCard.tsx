@@ -10,14 +10,13 @@ import {
   BreathingConfig,
   FocusTimerConfig,
   DeadlineTrackerConfig,
-  StreakTrackerConfig,
+  HabitTrackerConfig,
 } from '@/src/types';
 import { TOOL_REGISTRY, BREATHING_PRESETS, FOCUS_TIMER_PRESETS } from '@/src/constants/tools';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
 import { useGoals } from '@/src/hooks/useGoals';
 import { useSettings } from '@/src/hooks/useSettings';
 import { calculateLifeData } from '@/src/utils/lifeData';
-import { AffirmationCarousel } from '@/src/components/affirmations/AffirmationCarousel';
 import { MOTIVATIONAL_QUOTES } from '@/src/constants/quotes';
 
 interface HomeToolCardProps {
@@ -72,8 +71,9 @@ function AffirmationsPreview() {
   const { config } = useToolConfig<AffirmationsConfig>('affirmations');
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
+  const customCount = config?.affirmations?.length ?? 0;
 
-  if (!config?.affirmations?.length) {
+  if (customCount === 0) {
     return (
       <Text style={[styles.previewText, { color: colors.secondaryText }]}>
         Tap to add your first affirmation
@@ -81,7 +81,11 @@ function AffirmationsPreview() {
     );
   }
 
-  return <AffirmationCarousel affirmations={config.affirmations} />;
+  return (
+    <Text style={[styles.previewText, { color: colors.secondaryText }]}>
+      {customCount} custom affirmation{customCount !== 1 ? 's' : ''}
+    </Text>
+  );
 }
 
 function BreathingPreview() {
@@ -144,34 +148,50 @@ function DeadlineTrackerPreview() {
 }
 
 function StreakTrackerPreview() {
-  const { config } = useToolConfig<StreakTrackerConfig>('streak-tracker');
+  const { config } = useToolConfig<HabitTrackerConfig>('streak-tracker');
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
-  const streaks = config?.streaks ?? [];
+  const habits = config?.habits ?? [];
 
-  if (streaks.length === 0) {
+  if (habits.length === 0) {
     return (
       <Text style={[styles.previewText, { color: colors.secondaryText }]}>
-        Tap to start tracking streaks
+        Tap to start tracking habits
       </Text>
     );
   }
 
-  const sorted = [...streaks].sort((a, b) => {
-    const aDays = Math.max(0, Math.round((Date.now() - new Date(a.startDate).getTime()) / (1000 * 60 * 60 * 24)));
-    const bDays = Math.max(0, Math.round((Date.now() - new Date(b.startDate).getTime()) / (1000 * 60 * 60 * 24)));
-    return bDays - aDays;
-  });
-  const top = sorted[0];
-  const now = new Date();
-  const start = new Date(top.startDate);
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  const days = Math.max(0, Math.round((todayStart.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24)));
+  // Find habit with highest current streak
+  const toDateKey = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+  const getStreak = (completions: string[]) => {
+    const set = new Set(completions);
+    const today = new Date();
+    const todayKey = toDateKey(today);
+    let count = 0;
+    const cursor = new Date(today);
+    if (!set.has(todayKey)) cursor.setDate(cursor.getDate() - 1);
+    while (count < 3650) {
+      if (!set.has(toDateKey(cursor))) break;
+      count++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return count;
+  };
+
+  const bestStreak = habits.reduce((best, h) => {
+    const s = getStreak(h.completions);
+    return s > best.streak ? { title: h.title, streak: s } : best;
+  }, { title: '', streak: 0 });
 
   return (
     <Text style={[styles.previewText, { color: colors.secondaryText }]}>
-      {streaks.length} streak{streaks.length !== 1 ? 's' : ''} · Best: {top.title} ({days} day{days !== 1 ? 's' : ''})
+      {habits.length} habit{habits.length !== 1 ? 's' : ''}
+      {bestStreak.streak > 0 ? ` · Best: ${bestStreak.title} (🔥 ${bestStreak.streak}d)` : ''}
     </Text>
   );
 }
@@ -307,5 +327,11 @@ const styles = StyleSheet.create({
   previewText: {
     fontSize: Layout.fontSize.caption,
     lineHeight: 18,
+  },
+  previewSubtext: {
+    fontSize: Layout.fontSize.caption,
+    lineHeight: 18,
+    marginTop: 2,
+    opacity: 0.6,
   },
 });
