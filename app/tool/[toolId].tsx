@@ -61,6 +61,9 @@ import { StreakTrackerList } from '@/src/components/streak-tracker/StreakTracker
 // Routines import
 import { RoutineList } from '@/src/components/routine/RoutineList';
 
+// Motivational Quotes import
+import { QuotesView } from '@/src/components/motivational-quotes/QuotesView';
+
 function MementoView() {
   const { config, setConfig } = useToolConfig<MementoMoriConfig>('memento-mori');
   const [activeView, setActiveView] = useState<VisualizationType>('hourglass');
@@ -206,6 +209,10 @@ function RoutinesView() {
   return <RoutineList />;
 }
 
+function MotivationalQuotesView() {
+  return <QuotesView />;
+}
+
 export default function ToolScreen() {
   const { toolId } = useLocalSearchParams<{ toolId: string }>();
   const router = useRouter();
@@ -224,6 +231,7 @@ export default function ToolScreen() {
       case 'streak-tracker': return <StreakTrackerView />;
       case 'routines': return <RoutinesView />;
       case 'tally-counter': return <TallyCounterView />;
+      case 'motivational-quotes': return <MotivationalQuotesView />;
       default: return <Text style={{ color: colors.text }}>Unknown tool</Text>;
     }
   };

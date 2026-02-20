@@ -73,6 +73,14 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     description:
       'Track anything with a simple tap counter. Add multiple counters, color-code them, and increment or decrement with a swipe.',
   },
+  {
+    id: 'motivational-quotes',
+    name: 'Quotes',
+    tagline: 'Words that move you',
+    icon: 'chatbubble-ellipses-outline',
+    description:
+      '100 curated motivational quotes from stoic philosophers, leaders, athletes, and thinkers. One quote at a time, full screen.',
+  },
 ];
 
 export const FOCUS_TIMER_PRESETS = [

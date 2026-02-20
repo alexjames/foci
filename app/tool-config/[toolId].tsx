@@ -81,6 +81,8 @@ function getDefaultConfig(toolId: ToolId): ToolConfig {
       return { toolId: 'tally-counter', counters: [] };
     case 'routines':
       return { toolId: 'routines', routines: [] };
+    case 'motivational-quotes':
+      return { toolId: 'motivational-quotes', notificationEnabled: false };
   }
 }
 

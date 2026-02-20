@@ -18,6 +18,7 @@ import { useGoals } from '@/src/hooks/useGoals';
 import { useSettings } from '@/src/hooks/useSettings';
 import { calculateLifeData } from '@/src/utils/lifeData';
 import { AffirmationCarousel } from '@/src/components/affirmations/AffirmationCarousel';
+import { MOTIVATIONAL_QUOTES } from '@/src/constants/quotes';
 
 interface HomeToolCardProps {
   toolId: ToolId;
@@ -197,6 +198,17 @@ function TallyCounterPreview() {
   );
 }
 
+function MotivationalQuotesPreview() {
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+  const quote = MOTIVATIONAL_QUOTES[new Date().getDate() % MOTIVATIONAL_QUOTES.length];
+  return (
+    <Text style={[styles.previewText, { color: colors.secondaryText }]} numberOfLines={2}>
+      "{quote.text}" — {quote.author}
+    </Text>
+  );
+}
+
 function RoutinesPreview() {
   const { config } = useToolConfig<import('@/src/types').RoutinesConfig>('routines');
   const colorScheme = useColorScheme() ?? 'light';
@@ -237,6 +249,7 @@ export function HomeToolCard({ toolId, drag, isActive, showHandle }: HomeToolCar
       case 'streak-tracker': return <StreakTrackerPreview />;
       case 'routines': return <RoutinesPreview />;
       case 'tally-counter': return <TallyCounterPreview />;
+      case 'motivational-quotes': return <MotivationalQuotesPreview />;
     }
   };
 
