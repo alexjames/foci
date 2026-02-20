@@ -58,6 +58,72 @@ function getDaysSubLabel(days: number): string {
   return 'days ago';
 }
 
+type TimeUnit = 'days' | 'weeks' | 'months' | 'years';
+
+function getAvailableUnits(days: number): TimeUnit[] {
+  const abs = Math.abs(days);
+  if (abs < 7) return ['days'];
+  if (abs < 30) return ['days', 'weeks'];
+  if (abs < 365) return ['days', 'weeks', 'months'];
+  return ['days', 'weeks', 'months', 'years'];
+}
+
+type TimePart = { value: number; label: string };
+
+function formatTimeUnit(days: number, unit: TimeUnit): { parts: TimePart[]; suffix: string } {
+  const abs = Math.abs(days);
+  const suffix = days >= 0 ? 'left' : 'ago';
+
+  if (days === 0) return { parts: [{ value: 0, label: '' }], suffix: 'days today' };
+
+  switch (unit) {
+    case 'days':
+      return { parts: [{ value: abs, label: '' }], suffix: days > 0 ? 'days left' : 'days ago' };
+    case 'weeks': {
+      const weeks = Math.floor(abs / 7);
+      const remDays = abs % 7;
+      return {
+        parts: [
+          { value: weeks, label: 'W' },
+          ...(remDays > 0 ? [{ value: remDays, label: 'D' }] : []),
+        ],
+        suffix,
+      };
+    }
+    case 'months': {
+      const months = Math.floor(abs / 30);
+      const rem = abs % 30;
+      const weeks = Math.floor(rem / 7);
+      const remDays = rem % 7;
+      return {
+        parts: [
+          { value: months, label: 'M' },
+          ...(weeks > 0 ? [{ value: weeks, label: 'W' }] : []),
+          ...(remDays > 0 ? [{ value: remDays, label: 'D' }] : []),
+        ],
+        suffix,
+      };
+    }
+    case 'years': {
+      const years = Math.floor(abs / 365);
+      const rem = abs % 365;
+      const months = Math.floor(rem / 30);
+      const rem2 = rem % 30;
+      const weeks = Math.floor(rem2 / 7);
+      const remDays = rem2 % 7;
+      return {
+        parts: [
+          { value: years, label: 'Y' },
+          ...(months > 0 ? [{ value: months, label: 'M' }] : []),
+          ...(weeks > 0 ? [{ value: weeks, label: 'W' }] : []),
+          ...(remDays > 0 ? [{ value: remDays, label: 'D' }] : []),
+        ],
+        suffix,
+      };
+    }
+  }
+}
+
 function RightAction() {
   return (
     <View style={styles.swipeActionRight}>
@@ -187,13 +253,27 @@ function DeadlineDetailSheet({
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
+  const [unitIndex, setUnitIndex] = useState(0);
+
+  const daysUntil = deadline ? getDaysUntil(deadline.date) : 0;
+  const availableUnits = deadline ? getAvailableUnits(daysUntil) : ['days' as TimeUnit];
+  const handleUnitTap = () => {
+    setUnitIndex((prev) => (prev + 1) % availableUnits.length);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  // Reset unit index when deadline changes
+  React.useEffect(() => { setUnitIndex(0); }, [deadline?.id]);
 
   if (!deadline) return null;
 
   const accentColor = getDeadlineColor(deadline.color, colorScheme);
-  const daysUntil = getDaysUntil(deadline.date);
   const isPast = daysUntil < 0;
   const countColor = isPast ? colors.destructive : accentColor;
+
+  const currentUnit = availableUnits[Math.min(unitIndex, availableUnits.length - 1)];
+  const { parts, suffix } = formatTimeUnit(daysUntil, currentUnit);
+  const hasMore = availableUnits.length > 1;
 
   const handleConfigure = () => {
     onClose();
@@ -243,17 +323,22 @@ function DeadlineDetailSheet({
           </Text>
         </View>
 
-        {/* Stats row */}
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Text style={[styles.statNumber, { color: countColor }]}>
-              {getDaysNumber(daysUntil)}
-            </Text>
-            <Text style={[styles.statLabel, { color: colors.secondaryText }]}>
-              {getDaysSubLabel(daysUntil)}
-            </Text>
+        {/* Stats — tap to cycle unit */}
+        <Pressable style={styles.statsArea} onPress={hasMore ? handleUnitTap : undefined}>
+          <View style={styles.statPartsRow}>
+            {parts.map((part, i) => (
+              <React.Fragment key={i}>
+                {i > 0 && <Text style={[styles.statPartSpacer, { color: countColor }]}> </Text>}
+                <Text style={[styles.statPartValue, { color: countColor }]}>{part.value}</Text>
+                {part.label ? <Text style={[styles.statPartLabel, { color: countColor }]}>{part.label}</Text> : null}
+              </React.Fragment>
+            ))}
           </View>
-        </View>
+          <Text style={[styles.statSuffix, { color: colors.secondaryText }]}>{suffix}</Text>
+          {hasMore && (
+            <Ionicons name="repeat-outline" size={14} color={colors.secondaryText} style={{ opacity: 0.4, marginTop: 4 }} />
+          )}
+        </Pressable>
 
         {/* Complete button */}
         <Pressable
@@ -592,26 +677,34 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.body,
     fontWeight: '500',
   },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Layout.spacing.lg,
-  },
-  statBox: {
+  statsArea: {
     alignItems: 'center',
     paddingVertical: Layout.spacing.md,
-    flex: 1,
+    paddingHorizontal: Layout.spacing.md,
+    marginBottom: Layout.spacing.lg,
   },
-  statNumber: {
+  statPartsRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  statPartValue: {
     fontSize: Layout.fontSize.heading,
     fontWeight: '700',
-    lineHeight: 34,
   },
-  statLabel: {
+  statPartLabel: {
     fontSize: Layout.fontSize.caption,
     fontWeight: '600',
-    marginTop: 2,
+    marginRight: Layout.spacing.sm,
+  },
+  statPartSpacer: {
+    fontSize: Layout.fontSize.heading,
+  },
+  statSuffix: {
+    fontSize: Layout.fontSize.title,
+    fontWeight: '600',
+    marginTop: 4,
   },
   completeButton: {
     flexDirection: 'row',
@@ -626,5 +719,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: Layout.fontSize.body,
     fontWeight: '600',
+  },
+  swipeHint: {
+    flexDirection: 'row',
+    gap: 2,
+    marginTop: 4,
+    opacity: 0.6,
   },
 });
