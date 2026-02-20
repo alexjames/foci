@@ -1,19 +1,21 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
-  ScrollView,
   View,
   Text,
   Pressable,
   Alert,
   useColorScheme,
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
+import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
-import { ToolId, MementoMoriConfig, AffirmationsConfig, BreathingConfig } from '@/src/types';
+import { ToolId, MementoMoriConfig, AffirmationsConfig, BreathingConfig, Goal } from '@/src/types';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
 import { TOOL_REGISTRY } from '@/src/constants/tools';
 
@@ -37,7 +39,6 @@ import {
 } from '@/src/components/memento/visualizations';
 
 // Goal imports
-import { GoalCard } from '@/src/components/GoalCard';
 import { EmptyState } from '@/src/components/EmptyState';
 
 // Breathing imports
@@ -123,62 +124,159 @@ function MementoView() {
   );
 }
 
-function GoalsView() {
-  const router = useRouter();
-  const { goals, deleteGoal, canAddGoal } = useGoals();
+function GoalDeleteAction() {
+  return (
+    <View style={styles.goalSwipeAction}>
+      <View style={styles.goalSwipeContent}>
+        <Ionicons name="trash-outline" size={22} color="#fff" />
+        <Text style={styles.goalSwipeText}>Delete</Text>
+      </View>
+    </View>
+  );
+}
+
+function SwipeableGoalCard({
+  goal,
+  onPress,
+  onDelete,
+  drag,
+  isActive,
+  showHandle,
+}: {
+  goal: Goal;
+  onPress: (id: string) => void;
+  onDelete: (id: string, name: string) => void;
+  drag: () => void;
+  isActive: boolean;
+  showHandle: boolean;
+}) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
+  const swipeableRef = React.useRef<Swipeable>(null);
 
-  const handleDelete = (id: string, name: string) => {
-    Alert.alert('Delete Goal', `Are you sure you want to delete "${name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteGoal(id) },
-    ]);
-  };
+  return (
+    <ScaleDecorator>
+      <View style={[styles.goalSwipeContainer, isActive && styles.goalSwipeActive]}>
+        <Swipeable
+          ref={swipeableRef}
+          renderRightActions={() => <GoalDeleteAction />}
+          onSwipeableOpen={(direction) => {
+            if (direction === 'right') {
+              swipeableRef.current?.close();
+              Alert.alert('Delete Goal', `Delete "${goal.name}"?`, [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: () => onDelete(goal.id, goal.name) },
+              ]);
+            }
+          }}
+          overshootRight={false}
+          enabled={!isActive}
+        >
+          <Pressable
+            onPress={() => onPress(goal.id)}
+            onLongPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              drag();
+            }}
+            style={[styles.goalRow, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}
+          >
+            <View style={styles.goalInfo}>
+              <Text style={[styles.goalName, { color: colors.text }]}>{goal.name}</Text>
+              {goal.outcome ? (
+                <Text style={[styles.goalSubtext, { color: colors.secondaryText }]} numberOfLines={1}>{goal.outcome}</Text>
+              ) : null}
+            </View>
+            {showHandle && (
+              <Ionicons name="reorder-three-outline" size={20} color={colors.secondaryText} style={{ opacity: 0.4 }} />
+            )}
+          </Pressable>
+        </Swipeable>
+      </View>
+    </ScaleDecorator>
+  );
+}
+
+function GoalsView() {
+  const router = useRouter();
+  const { goals, deleteGoal, setGoals, canAddGoal } = useGoals();
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDelete = useCallback((id: string, _name: string) => {
+    deleteGoal(id);
+  }, [deleteGoal]);
+
+  const handleDragEnd = useCallback(({ data }: { data: Goal[] }) => {
+    setGoals(data.map((g, i) => ({ ...g, order: i })));
+    setIsDragging(false);
+  }, [setGoals]);
+
+  const renderItem = useCallback(
+    ({ item, drag, isActive }: RenderItemParams<Goal>) => (
+      <SwipeableGoalCard
+        goal={item}
+        onPress={(id) => router.push(`/edit-goal/${id}`)}
+        onDelete={handleDelete}
+        drag={() => { setIsDragging(true); drag(); }}
+        isActive={isActive}
+        showHandle={isDragging}
+      />
+    ),
+    [handleDelete, isDragging, router]
+  );
+
+  const ListFooter = (
+    <View>
+      {canAddGoal && (
+        <View style={styles.goalsAddRow}>
+          <Pressable onPress={() => router.push('/edit-goal/new')} style={[styles.goalsAddButton, { borderColor: colors.cardBorder }]}>
+            <Ionicons name="add" size={20} color={colors.secondaryText} />
+          </Pressable>
+        </View>
+      )}
+      {!canAddGoal && (
+        <View style={[styles.maxGoalsMessage, { backgroundColor: colors.cardBackground }]}>
+          <Ionicons name="information-circle-outline" size={20} color={colors.secondaryText} />
+          <Text style={[styles.maxGoalsText, { color: colors.secondaryText }]}>
+            Avoid setting too many goals at once. Research shows that the brain functions best when focused on 4 or fewer goals at any given point in time.
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+
+  if (goals.length === 0) {
+    return (
+      <View style={{ flex: 1 }}>
+        <EmptyState title="No Goals Yet" message="Tap the + button to add your first goal." />
+        <View style={styles.goalsAddRow}>
+          <Pressable onPress={() => router.push('/edit-goal/new')} style={[styles.goalsAddButton, { borderColor: colors.cardBorder }]}>
+            <Ionicons name="add" size={20} color={colors.secondaryText} />
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={styles.goalsScrollContent}>
-        {goals.length === 0 ? (
-          <EmptyState title="No Goals Yet" message="Tap the + button to add your first goal." />
-        ) : (
-          <>
-            {goals.map((goal) => (
-              <View key={goal.id} style={[styles.goalRow, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
-                <Pressable onPress={() => router.push(`/edit-goal/${goal.id}`)} style={styles.goalInfo}>
-                  <Text style={[styles.goalName, { color: colors.text }]}>{goal.name}</Text>
-                  {goal.outcome ? (
-                    <Text style={[styles.goalSubtext, { color: colors.secondaryText }]} numberOfLines={1}>{goal.outcome}</Text>
-                  ) : null}
-                </Pressable>
-                <Pressable onPress={() => handleDelete(goal.id, goal.name)} hitSlop={8} style={{ padding: Layout.spacing.xs }}>
-                  <Ionicons name="trash-outline" size={20} color={colors.destructive} />
-                </Pressable>
-              </View>
-            ))}
-            {!canAddGoal && (
-              <View style={[styles.maxGoalsMessage, { backgroundColor: colors.cardBackground }]}>
-                <Ionicons name="information-circle-outline" size={20} color={colors.secondaryText} />
-                <Text style={[styles.maxGoalsText, { color: colors.secondaryText }]}>
-                  Avoid setting too many goals at once. Research shows that the brain functions best when focused on 4 or fewer goals at any given point in time.
-                </Text>
-              </View>
-            )}
-          </>
-        )}
-      </ScrollView>
-      <View style={styles.bottomActions}>
-        {goals.length > 0 && (
-          <Pressable onPress={() => router.push('/reveal')} style={[styles.reviewButton, { backgroundColor: colors.tint }]}>
-            <Text style={styles.reviewButtonText}>Review Goals</Text>
+      <DraggableFlatList
+        data={goals}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        onDragEnd={handleDragEnd}
+        ListFooterComponent={ListFooter}
+        contentContainerStyle={styles.goalsScrollContent}
+        activationDistance={1}
+      />
+      {goals.length > 0 && (
+        <View style={styles.goalsFabRow} pointerEvents="box-none">
+          <Pressable onPress={() => router.push('/reveal')} style={[styles.goalsFab, { backgroundColor: colors.tint }]}>
+            <Ionicons name="play" size={26} color="#fff" />
           </Pressable>
-        )}
-        {canAddGoal && (
-          <Pressable onPress={() => router.push('/edit-goal/new')} style={styles.fab}>
-            <Ionicons name="add" size={28} color="#fff" />
-          </Pressable>
-        )}
-      </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -323,15 +421,39 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.title,
     fontWeight: '600',
   },
+  goalSwipeContainer: {
+    marginHorizontal: Layout.spacing.md,
+    marginBottom: Layout.spacing.sm,
+    borderRadius: Layout.borderRadius.md,
+    overflow: 'hidden',
+  },
+  goalSwipeActive: {
+    opacity: 0.95,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  goalSwipeAction: {
+    flex: 1,
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingRight: Layout.spacing.lg,
+    borderRadius: Layout.borderRadius.md,
+  },
+  goalSwipeContent: { alignItems: 'center', gap: 4 },
+  goalSwipeText: { color: '#fff', fontSize: Layout.fontSize.caption, fontWeight: '600' },
   goalRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderRadius: Layout.borderRadius.md,
     padding: Layout.spacing.md,
-    marginBottom: Layout.spacing.sm,
+    gap: Layout.spacing.sm,
   },
-  goalInfo: { flex: 1, marginRight: Layout.spacing.md },
+  goalInfo: { flex: 1 },
   goalName: { fontSize: Layout.fontSize.body, fontWeight: '600' },
   goalSubtext: { fontSize: Layout.fontSize.caption, marginTop: 2 },
   maxGoalsMessage: {
@@ -339,6 +461,7 @@ const styles = StyleSheet.create({
     padding: Layout.spacing.md,
     borderRadius: Layout.borderRadius.md,
     marginTop: Layout.spacing.md,
+    marginHorizontal: Layout.spacing.md,
     gap: Layout.spacing.sm,
     alignItems: 'flex-start',
   },
@@ -348,22 +471,32 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   goalsScrollContent: {
-    padding: Layout.spacing.md,
-    paddingBottom: 200,
+    paddingTop: Layout.spacing.md,
+    paddingBottom: 100,
     flexGrow: 1,
   },
-  bottomActions: {
+  goalsAddRow: {
+    alignItems: 'center',
+    paddingVertical: Layout.spacing.md,
+  },
+  goalsAddButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  goalsFabRow: {
     position: 'absolute',
-    bottom: 0,
+    bottom: Layout.spacing.xl,
     left: 0,
     right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: Layout.spacing.xl,
-    paddingHorizontal: Layout.spacing.md,
-    gap: Layout.spacing.md,
   },
-  fab: {
-    backgroundColor: '#007AFF',
+  goalsFab: {
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -374,16 +507,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
-  },
-  reviewButton: {
-    alignSelf: 'stretch',
-    borderRadius: Layout.borderRadius.md,
-    padding: Layout.spacing.md,
-    alignItems: 'center',
-  },
-  reviewButtonText: {
-    color: '#fff',
-    fontSize: Layout.fontSize.body,
-    fontWeight: '600',
   },
 });

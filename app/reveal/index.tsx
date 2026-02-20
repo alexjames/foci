@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, Animated, useWindowDimensions } from 'react-native';
+import { StyleSheet, useColorScheme } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TypewriterText } from '@/src/components/TypewriterText';
 import { CommitButton } from '@/src/components/CommitButton';
 import { useGoals } from '@/src/hooks/useGoals';
 import { useSettings } from '@/src/hooks/useSettings';
+import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
 import { Text, View } from '@/components/Themed';
 
@@ -13,7 +14,8 @@ export default function RevealScreen() {
   const router = useRouter();
   const { goals } = useGoals();
   const { recordCommit } = useSettings();
-  const { height } = useWindowDimensions();
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
   const [currentGoalIndex, setCurrentGoalIndex] = useState(0);
   const [showCommit, setShowCommit] = useState(false);
   const [goalLabel, setGoalLabel] = useState<'name' | 'details'>('name');
@@ -65,43 +67,43 @@ export default function RevealScreen() {
 
   if (goals.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centerContent}>
-          <Text style={styles.emptyText}>No goals to review.</Text>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.centerContent, { backgroundColor: 'transparent' }]}>
+          <Text style={[styles.emptyText, { color: colors.secondaryText }]}>No goals to review.</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.progressContainer}>
-        <Text style={styles.progressText}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.progressContainer, { backgroundColor: 'transparent' }]}>
+        <Text style={[styles.progressText, { color: colors.secondaryText }]}>
           {currentGoalIndex + 1} / {goals.length}
         </Text>
       </View>
 
-      <View style={styles.content}>
+      <View style={[styles.content, { backgroundColor: 'transparent' }]}>
         {goalLabel === 'name' && (
           <TypewriterText
             key={`name-${currentGoalIndex}`}
             text={getGoalText()}
             speed={45}
             onComplete={handleTypewriterComplete}
-            style={styles.goalName}
-            cursorColor="#0A84FF"
+            style={[styles.goalName, { color: colors.text }]}
+            cursorColor={colors.tint}
           />
         )}
         {goalLabel === 'details' && (
-          <View style={styles.detailsContainer}>
-            <Text style={styles.goalNameStatic}>{currentGoal.name}</Text>
+          <View style={[styles.detailsContainer, { backgroundColor: 'transparent' }]}>
+            <Text style={[styles.goalNameStatic, { color: colors.text }]}>{currentGoal.name}</Text>
             <TypewriterText
               key={`details-${currentGoalIndex}`}
               text={getGoalText()}
               speed={30}
               onComplete={handleTypewriterComplete}
-              style={styles.goalDetails}
-              cursorColor="#0A84FF"
+              style={[styles.goalDetails, { color: colors.secondaryText }]}
+              cursorColor={colors.tint}
             />
           </View>
         )}
@@ -115,54 +117,54 @@ export default function RevealScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
   },
   centerContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'transparent',
   },
   emptyText: {
-    color: '#9CA3AF',
     fontSize: Layout.fontSize.body,
   },
   progressContainer: {
     paddingTop: Layout.spacing.md,
     paddingHorizontal: Layout.spacing.xl,
-    backgroundColor: 'transparent',
   },
   progressText: {
-    color: '#6B7280',
     fontSize: Layout.fontSize.caption,
     textAlign: 'right',
   },
   content: {
     flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: Layout.spacing.xl,
-    backgroundColor: 'transparent',
   },
   goalName: {
-    color: '#FFFFFF',
-    fontSize: 32,
-    fontWeight: '700',
-    lineHeight: 42,
+    fontSize: 24,
+    fontWeight: '400',
+    lineHeight: 36,
+    letterSpacing: 0.2,
+    textAlign: 'center',
   },
   detailsContainer: {
-    backgroundColor: 'transparent',
+    alignItems: 'center',
+    maxWidth: 340,
   },
   goalNameStatic: {
-    color: '#FFFFFF',
-    fontSize: 32,
-    fontWeight: '700',
-    lineHeight: 42,
+    fontSize: 24,
+    fontWeight: '400',
+    lineHeight: 36,
+    letterSpacing: 0.2,
+    textAlign: 'center',
     marginBottom: Layout.spacing.lg,
   },
   goalDetails: {
-    color: '#D1D5DB',
     fontSize: Layout.fontSize.body,
     fontWeight: '400',
     lineHeight: 26,
+    textAlign: 'center',
+    letterSpacing: 0.2,
+    fontStyle: 'italic',
   },
 });
