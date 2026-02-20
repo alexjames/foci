@@ -179,7 +179,6 @@ function TallyDetailSheet({
   onIncrement,
   onDecrement,
   onReset,
-  onDelete,
 }: {
   counter: TallyCounter | null;
   visible: boolean;
@@ -187,7 +186,6 @@ function TallyDetailSheet({
   onIncrement: (id: string) => void;
   onDecrement: (id: string) => void;
   onReset: (id: string) => void;
-  onDelete: (id: string, title: string) => void;
 }) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
@@ -243,7 +241,7 @@ function TallyDetailSheet({
           </Text>
         </View>
 
-        {/* Increment / Decrement buttons */}
+        {/* Controls: decrement, reset, increment */}
         <View style={styles.counterControls}>
           <Pressable
             onPress={() => {
@@ -251,30 +249,13 @@ function TallyDetailSheet({
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             }}
             style={({ pressed }) => [
-              styles.controlButton,
-              { backgroundColor: '#FF9500', opacity: pressed ? 0.8 : 1 },
-              counter.count === 0 && styles.controlButtonDisabled,
+              styles.iconButton,
+              { backgroundColor: '#FF9500', opacity: pressed || counter.count === 0 ? 0.4 : 1 },
             ]}
             disabled={counter.count === 0}
           >
             <Ionicons name="remove" size={28} color="#fff" />
           </Pressable>
-          <Pressable
-            onPress={() => {
-              onIncrement(counter.id);
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }}
-            style={({ pressed }) => [
-              styles.controlButton,
-              { backgroundColor: '#34C759', opacity: pressed ? 0.8 : 1 },
-            ]}
-          >
-            <Ionicons name="add" size={28} color="#fff" />
-          </Pressable>
-        </View>
-
-        {/* Reset / Delete row */}
-        <View style={styles.sheetActions}>
           <Pressable
             onPress={() => {
               Alert.alert('Reset Counter', `Reset "${counter.title}" to zero?`, [
@@ -283,22 +264,23 @@ function TallyDetailSheet({
               ]);
             }}
             style={({ pressed }) => [
-              styles.sheetActionButton,
-              { borderColor: colors.cardBorder, opacity: pressed ? 0.6 : 1 },
+              styles.iconButton,
+              { backgroundColor: colors.cardBorder, opacity: pressed ? 0.6 : 1 },
             ]}
           >
-            <Ionicons name="refresh-outline" size={16} color={colors.secondaryText} />
-            <Text style={[styles.sheetActionText, { color: colors.secondaryText }]}>Reset</Text>
+            <Ionicons name="refresh-outline" size={24} color={colors.secondaryText} />
           </Pressable>
           <Pressable
-            onPress={() => onDelete(counter.id, counter.title)}
+            onPress={() => {
+              onIncrement(counter.id);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
             style={({ pressed }) => [
-              styles.sheetActionButton,
-              { borderColor: colors.cardBorder, opacity: pressed ? 0.6 : 1 },
+              styles.iconButton,
+              { backgroundColor: '#34C759', opacity: pressed ? 0.8 : 1 },
             ]}
           >
-            <Ionicons name="trash-outline" size={16} color={colors.destructive} />
-            <Text style={[styles.sheetActionText, { color: colors.destructive }]}>Delete</Text>
+            <Ionicons name="add" size={28} color="#fff" />
           </Pressable>
         </View>
       </View>
@@ -440,7 +422,6 @@ export function TallyCounterList() {
         onIncrement={(id) => updateCounter(id, 1)}
         onDecrement={(id) => updateCounter(id, -1)}
         onReset={handleReset}
-        onDelete={handleDelete}
       />
     </View>
   );
@@ -642,16 +623,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Layout.spacing.md,
     marginBottom: Layout.spacing.md,
+    justifyContent: 'center',
   },
-  controlButton: {
-    flex: 1,
+  iconButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: Layout.spacing.md,
-    borderRadius: Layout.borderRadius.md,
-  },
-  controlButtonDisabled: {
-    opacity: 0.4,
   },
   sheetActions: {
     flexDirection: 'row',
