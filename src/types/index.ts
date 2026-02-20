@@ -87,18 +87,21 @@ export interface DeadlineTrackerConfig {
   notificationTime?: { hour: number; minute: number };
 }
 
-export interface Streak {
+export interface Habit {
   id: string;
   title: string;
-  startDate: string; // ISO date string
   color?: string;
-  longestDays?: number;
+  completions: string[]; // 'YYYY-MM-DD' strings
   createdAt: string;
+  notificationEnabled?: boolean;
+  notificationTime?: { hour: number; minute: number };
+  notificationDays?: number[]; // 0=Sun … 6=Sat; undefined means every day
+  notificationId?: string; // expo-notifications identifier
 }
 
-export interface StreakTrackerConfig {
+export interface HabitTrackerConfig {
   toolId: 'streak-tracker';
-  streaks: Streak[];
+  habits: Habit[];
   notificationEnabled: boolean;
   notificationTime?: { hour: number; minute: number };
 }
@@ -160,7 +163,7 @@ export interface MotivationalQuotesConfig {
   notificationTime?: { hour: number; minute: number };
 }
 
-export type ToolConfig = MementoMoriConfig | GoalsConfig | AffirmationsConfig | BreathingConfig | FocusTimerConfig | DeadlineTrackerConfig | StreakTrackerConfig | RoutineConfig | TallyCounterConfig | RoutinesConfig | MotivationalQuotesConfig;
+export type ToolConfig = MementoMoriConfig | GoalsConfig | AffirmationsConfig | BreathingConfig | FocusTimerConfig | DeadlineTrackerConfig | HabitTrackerConfig | RoutineConfig | TallyCounterConfig | RoutinesConfig | MotivationalQuotesConfig;
 
 export interface HomeToolEntry {
   toolId: ToolId;

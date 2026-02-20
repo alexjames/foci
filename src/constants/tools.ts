@@ -51,11 +51,11 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
   },
   {
     id: 'streak-tracker',
-    name: 'Streak Tracker',
-    tagline: 'Keep the fire burning',
-    icon: 'flame-outline',
+    name: 'Habit Tracker',
+    tagline: 'Build daily consistency',
+    icon: 'checkmark-circle-outline',
     description:
-      'Track your daily streaks and build consistency. See how many days you\'ve kept each habit alive.',
+      'Track your daily habits with a 7-day completion view. Tap to mark each day done and see your progress over the past year.',
   },
   {
     id: 'routines',

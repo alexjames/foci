@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,6 +6,7 @@ import {
   Pressable,
   Alert,
   Modal,
+  ScrollView,
   useColorScheme,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -18,48 +19,287 @@ import DraggableFlatList, {
 import * as Haptics from 'expo-haptics';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
-import { StreakTrackerConfig, Streak } from '@/src/types';
+import { HabitTrackerConfig, Habit } from '@/src/types';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
 import { DEADLINE_COLORS } from '@/src/constants/tools';
 
-function getStreakColor(colorId: string | undefined, scheme: 'light' | 'dark'): string {
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function toDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function getLast7Days(): Date[] {
+  const days: Date[] = [];
+  const today = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    days.push(d);
+  }
+  return days;
+}
+
+function getCurrentStreak(completionSet: Set<string>): number {
+  let count = 0;
+  const today = new Date();
+  const todayKey = toDateKey(today);
+  const cursor = new Date(today);
+  if (!completionSet.has(todayKey)) {
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  while (count < 3650) {
+    if (!completionSet.has(toDateKey(cursor))) break;
+    count++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return count;
+}
+
+function getLongestStreak(completionSet: Set<string>): number {
+  if (completionSet.size === 0) return 0;
+  const sorted = Array.from(completionSet).sort();
+  let longest = 1;
+  let current = 1;
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = new Date(sorted[i - 1]);
+    const curr = new Date(sorted[i]);
+    const diff = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
+    if (diff === 1) {
+      current++;
+      if (current > longest) longest = current;
+    } else {
+      current = 1;
+    }
+  }
+  return longest;
+}
+
+function getHabitColor(colorId: string | undefined, scheme: 'light' | 'dark'): string {
   const found = DEADLINE_COLORS.find((c) => c.id === colorId);
   if (found) return scheme === 'dark' ? found.dark : found.light;
-  return scheme === 'dark' ? '#FB923C' : '#EA580C';
+  return '#6DC8A8'; // default turquoise
 }
 
-function getDaysSince(dateStr: string): number {
-  const now = new Date();
-  const start = new Date(dateStr);
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  return Math.max(0, Math.round((todayStart.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24)));
+const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// ─── Year Grid ──────────────────────────────────────────────────────────────
+
+function YearGrid({
+  completionSet,
+  accentColor,
+  colors,
+}: {
+  completionSet: Set<string>;
+  accentColor: string;
+  colors: typeof Colors.light;
+}) {
+  const CELL = 11;
+  const GAP = 2;
+  const DOW_LABEL_WIDTH = 18;
+
+  // Build weeks: last 53 weeks ending today
+  const today = new Date();
+
+  // Start from Monday of the week 52 weeks ago
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() - 364);
+  const startDow = startDate.getDay();
+  const daysToMon = startDow === 0 ? 6 : startDow - 1;
+  startDate.setDate(startDate.getDate() - daysToMon);
+
+  // Each column = one week starting Monday
+  type Cell = { dateKey: string; inRange: boolean };
+  const columns: Cell[][] = [];
+  const monthLabels: { col: number; month: number }[] = [];
+  const seenMonths = new Set<number>();
+
+  let cursor = new Date(startDate);
+  while (cursor <= today) {
+    const week: Cell[] = [];
+    for (let dow = 0; dow < 7; dow++) {
+      week.push({ dateKey: toDateKey(cursor), inRange: cursor <= today });
+      // Track month starts
+      if (cursor.getDate() <= 7 && !seenMonths.has(cursor.getMonth())) {
+        seenMonths.add(cursor.getMonth());
+        monthLabels.push({ col: columns.length, month: cursor.getMonth() });
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    columns.push(week);
+    if (columns.length > 54) break;
+  }
+
+  const scrollRef = useRef<ScrollView>(null);
+
+  return (
+    <ScrollView
+      ref={scrollRef}
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.gridScrollContent}
+      onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+    >
+      <View>
+        {/* Month labels row */}
+        <View style={[styles.gridMonthRow, { marginLeft: DOW_LABEL_WIDTH + GAP }]}>
+          {columns.map((_, ci) => {
+            const entry = monthLabels.find((e) => e.col === ci);
+            return (
+              <View key={ci} style={{ width: CELL + GAP, overflow: 'visible' }}>
+                {entry ? (
+                  <Text style={[styles.gridMonthLabel, { color: colors.secondaryText }]} numberOfLines={1}>
+                    {MONTH_LABELS[entry.month]}
+                  </Text>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Grid body */}
+        <View style={styles.gridBody}>
+          {/* Day-of-week labels (Mon=0 .. Sun=6) */}
+          <View style={[styles.gridDowCol, { width: DOW_LABEL_WIDTH, marginRight: GAP }]}>
+            {['Mo', '', 'We', '', 'Fr', '', 'Su'].map((label, i) => (
+              <View key={i} style={{ height: CELL + GAP, justifyContent: 'center' }}>
+                {label ? (
+                  <Text style={[styles.gridDowLabel, { color: colors.secondaryText }]}>
+                    {label}
+                  </Text>
+                ) : null}
+              </View>
+            ))}
+          </View>
+
+          {/* Columns */}
+          <View style={styles.gridCols}>
+            {columns.map((week, ci) => (
+              <View key={ci} style={{ marginRight: GAP }}>
+                {week.map((cell, ri) => {
+                  const done = cell.inRange && completionSet.has(cell.dateKey);
+                  return (
+                    <View
+                      key={ri}
+                      style={[
+                        styles.gridCell,
+                        {
+                          width: CELL,
+                          height: CELL,
+                          marginBottom: GAP,
+                          borderRadius: 2,
+                          backgroundColor: done
+                            ? accentColor
+                            : cell.inRange
+                            ? colors.cardBorder
+                            : 'transparent',
+                        },
+                      ]}
+                    />
+                  );
+                })}
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+    </ScrollView>
+  );
 }
 
-function formatStreakDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+// ─── Detail Sheet ────────────────────────────────────────────────────────────
+
+function HabitDetailSheet({
+  habit,
+  visible,
+  onClose,
+}: {
+  habit: Habit | null;
+  visible: boolean;
+  onClose: () => void;
+}) {
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+  const router = useRouter();
+
+  if (!habit) return null;
+
+  const accentColor = getHabitColor(habit.color, colorScheme);
+  const completionSet = new Set(habit.completions);
+  const today = new Date();
+
+  // Days completed this week (Mon–today)
+  const dayOfWeek = today.getDay(); // 0=Sun
+  const daysFromMon = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  let thisWeek = 0;
+  for (let i = 0; i <= daysFromMon; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    if (completionSet.has(toDateKey(d))) thisWeek++;
+  }
+
+  // Days completed this month
+  const daysIntoMonth = today.getDate();
+  let thisMonth = 0;
+  for (let i = 0; i < daysIntoMonth; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    if (completionSet.has(toDateKey(d))) thisMonth++;
+  }
+
+  const handleConfigure = () => {
+    onClose();
+    router.push(`/edit-streak/${habit.id}` as any);
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose} />
+      <View style={[styles.sheet, { backgroundColor: colors.cardBackground, borderTopColor: accentColor }]}>
+        <View style={[styles.handle, { backgroundColor: colors.cardBorder }]} />
+
+        {/* Title row */}
+        <View style={styles.sheetTitleRow}>
+          <View style={{ width: 38 }} />
+          <Text style={[styles.sheetTitle, { color: accentColor }]} numberOfLines={2}>
+            {habit.title}
+          </Text>
+          <Pressable onPress={handleConfigure} hitSlop={8} style={styles.configureButton}>
+            <Ionicons name="settings-outline" size={22} color={colors.secondaryText} />
+          </Pressable>
+        </View>
+
+        {/* Stats */}
+        <View style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <Text style={[styles.statNumber, { color: accentColor }]}>{thisWeek}</Text>
+            <Text style={[styles.statLabel, { color: colors.secondaryText }]}>this week</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
+          <View style={styles.statBox}>
+            <Text style={[styles.statNumber, { color: colors.secondaryText }]}>{thisMonth}</Text>
+            <Text style={[styles.statLabel, { color: colors.secondaryText }]}>this month</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
+          <View style={styles.statBox}>
+            <Text style={[styles.statNumber, { color: colors.secondaryText }]}>{habit.completions.length}</Text>
+            <Text style={[styles.statLabel, { color: colors.secondaryText }]}>total days</Text>
+          </View>
+        </View>
+
+        {/* Year grid */}
+        <Text style={[styles.gridSectionLabel, { color: colors.secondaryText }]}>PAST YEAR</Text>
+        <YearGrid completionSet={completionSet} accentColor={accentColor} colors={colors} />
+      </View>
+    </Modal>
+  );
 }
 
-function getDaysLabel(days: number): string {
-  return days === 1 ? 'day' : 'days';
-}
-
-const RESET_MESSAGES = [
-  "Every master was once a beginner. You've got this.",
-  "Falling down is part of the journey. Getting back up is what matters.",
-  "A setback is a setup for a comeback. Start again.",
-  "The best time to restart is right now. You're stronger than you think.",
-  "Progress isn't always linear. What matters is you're trying again.",
-];
-
-function getRandomResetMessage(): string {
-  return RESET_MESSAGES[Math.floor(Math.random() * RESET_MESSAGES.length)];
-}
+// ─── Habit Card ──────────────────────────────────────────────────────────────
 
 function DeleteAction() {
   return (
@@ -72,31 +312,20 @@ function DeleteAction() {
   );
 }
 
-function ResetAction() {
-  return (
-    <View style={styles.swipeActionLeft}>
-      <View style={styles.swipeActionContent}>
-        <Ionicons name="refresh-outline" size={22} color="#fff" />
-        <Text style={styles.swipeText}>Reset</Text>
-      </View>
-    </View>
-  );
-}
-
-function SwipeableStreakCard({
-  streak,
+function SwipeableHabitCard({
+  habit,
   scheme,
   onCardPress,
-  onReset,
+  onToggleDay,
   onDelete,
   drag,
   isActive,
   showHandle,
 }: {
-  streak: Streak;
+  habit: Habit;
   scheme: 'light' | 'dark';
   onCardPress: (id: string) => void;
-  onReset: (id: string, title: string) => void;
+  onToggleDay: (id: string, dateKey: string) => void;
   onDelete: (id: string, title: string) => void;
   drag: () => void;
   isActive: boolean;
@@ -104,18 +333,16 @@ function SwipeableStreakCard({
 }) {
   const colors = Colors[scheme];
   const swipeableRef = React.useRef<Swipeable>(null);
-  const accentColor = getStreakColor(streak.color, scheme);
-  const daysSince = getDaysSince(streak.startDate);
-
-  const handleSwipeRight = useCallback(() => {
-    onReset(streak.id, streak.title);
-    swipeableRef.current?.close();
-  }, [streak.id, streak.title, onReset]);
+  const accentColor = getHabitColor(habit.color, scheme);
+  const completionSet = useMemo(() => new Set(habit.completions), [habit.completions]);
+  const currentStreak = useMemo(() => getCurrentStreak(completionSet), [completionSet]);
+  const last7 = useMemo(() => getLast7Days(), []);
+  const todayKey = toDateKey(new Date());
 
   const handleSwipeLeft = useCallback(() => {
-    onDelete(streak.id, streak.title);
     swipeableRef.current?.close();
-  }, [streak.id, streak.title, onDelete]);
+    onDelete(habit.id, habit.title);
+  }, [habit.id, habit.title, onDelete]);
 
   return (
     <ScaleDecorator>
@@ -123,43 +350,68 @@ function SwipeableStreakCard({
         <Swipeable
           ref={swipeableRef}
           renderRightActions={() => <DeleteAction />}
-          renderLeftActions={() => <ResetAction />}
           onSwipeableOpen={(direction) => {
-            if (direction === 'left') handleSwipeRight();
-            else handleSwipeLeft();
+            if (direction === 'right') handleSwipeLeft();
           }}
           overshootRight={false}
-          overshootLeft={false}
           enabled={!isActive}
         >
-          <Pressable
-            onPress={() => onCardPress(streak.id)}
-            onLongPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              drag();
-            }}
-            style={[
-              styles.card,
-              { backgroundColor: colors.cardBackground, borderLeftColor: accentColor },
-            ]}
-          >
-            <View style={styles.cardContent}>
+          <View style={[styles.card, { backgroundColor: colors.cardBackground, borderLeftColor: accentColor }]}>
+            {/* Left: title + streak */}
+            <Pressable
+              onPress={() => onCardPress(habit.id)}
+              onLongPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                drag();
+              }}
+              style={styles.cardLeft}
+            >
               <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
-                {streak.title}
+                {habit.title}
               </Text>
-              <Text style={[styles.cardDate, { color: colors.secondaryText }]}>
-                Since {formatStreakDate(streak.startDate)}
-              </Text>
+              {currentStreak > 0 && (
+                <Text style={[styles.cardStreak, { color: accentColor }]}>
+                  🔥 {currentStreak} day{currentStreak !== 1 ? 's' : ''}
+                </Text>
+              )}
+              {habit.notificationEnabled && (
+                <Ionicons name="notifications-outline" size={12} color={colors.secondaryText} style={styles.notifIcon} />
+              )}
+            </Pressable>
+
+            {/* 7-day circles */}
+            <View style={styles.dayRow}>
+              {last7.map((d) => {
+                const key = toDateKey(d);
+                const done = completionSet.has(key);
+                const isToday = key === todayKey;
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => {
+                      onToggleDay(habit.id, key);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                    style={styles.dayCell}
+                    hitSlop={4}
+                  >
+                    <Text style={[
+                      styles.dayLabel,
+                      { color: isToday ? accentColor : colors.secondaryText },
+                      isToday && styles.dayLabelToday,
+                    ]}>
+                      {DAY_LABELS[d.getDay()]}
+                    </Text>
+                    <Ionicons
+                      name={done ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={22}
+                      color={done ? accentColor : colors.cardBorder}
+                    />
+                  </Pressable>
+                );
+              })}
             </View>
-            <View style={[styles.divider, { backgroundColor: colors.cardBorder }]} />
-            <View style={styles.cardRight}>
-              <Text style={[styles.daysNumber, { color: accentColor }]}>
-                {daysSince}
-              </Text>
-              <Text style={[styles.daysSubLabel, { color: accentColor }]}>
-                {getDaysLabel(daysSince)}
-              </Text>
-            </View>
+
             {showHandle && (
               <Ionicons
                 name="reorder-three-outline"
@@ -168,103 +420,18 @@ function SwipeableStreakCard({
                 style={styles.dragHandle}
               />
             )}
-          </Pressable>
+          </View>
         </Swipeable>
       </View>
     </ScaleDecorator>
   );
 }
 
-function StreakDetailSheet({
-  streak,
-  visible,
-  onClose,
-  onReset,
-}: {
-  streak: Streak | null;
-  visible: boolean;
-  onClose: () => void;
-  onReset: (id: string, title: string) => void;
-}) {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-  const router = useRouter();
+// ─── Main List ───────────────────────────────────────────────────────────────
 
-  if (!streak) return null;
-
-  const accentColor = getStreakColor(streak.color, colorScheme);
-  const currentDays = getDaysSince(streak.startDate);
-  const longestDays = Math.max(streak.longestDays ?? 0, currentDays);
-
-  const handleConfigure = () => {
-    onClose();
-    router.push(`/edit-streak/${streak.id}` as any);
-  };
-
-  const handleReset = () => {
-    onReset(streak.id, streak.title);
-  };
-
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View
-        style={[
-          styles.sheet,
-          {
-            backgroundColor: colors.cardBackground,
-            borderTopColor: accentColor,
-          },
-        ]}
-      >
-        {/* Drag handle */}
-        <View style={[styles.handle, { backgroundColor: colors.cardBorder }]} />
-
-        {/* Title row */}
-        <View style={styles.sheetTitleRow}>
-          <View style={{ width: 38 }} />
-          <Text style={[styles.sheetTitle, { color: accentColor }]} numberOfLines={2}>
-            {streak.title}
-          </Text>
-          <Pressable onPress={handleConfigure} hitSlop={8} style={styles.configureButton}>
-            <Ionicons name="settings-outline" size={22} color={colors.secondaryText} />
-          </Pressable>
-        </View>
-
-        {/* Stats row */}
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Text style={[styles.statNumber, { color: accentColor }]}>{currentDays}</Text>
-            <Text style={[styles.statLabel, { color: colors.secondaryText }]}>current</Text>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
-          <View style={styles.statBox}>
-            <Text style={[styles.statNumber, { color: colors.secondaryText }]}>{longestDays}</Text>
-            <Text style={[styles.statLabel, { color: colors.secondaryText }]}>longest</Text>
-          </View>
-        </View>
-
-        {/* Reset button */}
-        <Pressable
-          onPress={handleReset}
-          style={({ pressed }) => [styles.resetButton, { opacity: pressed ? 0.8 : 1 }]}
-        >
-          <Ionicons name="refresh-outline" size={20} color="#fff" />
-          <Text style={styles.resetButtonText}>Reset Streak</Text>
-        </Pressable>
-      </View>
-    </Modal>
-  );
-}
-
-const DEFAULT_CONFIG: StreakTrackerConfig = {
+const DEFAULT_CONFIG: HabitTrackerConfig = {
   toolId: 'streak-tracker',
-  streaks: [],
+  habits: [],
   notificationEnabled: false,
 };
 
@@ -272,38 +439,27 @@ export function StreakTrackerList() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
-  const { config, setConfig } = useToolConfig<StreakTrackerConfig>('streak-tracker');
+  const { config, setConfig } = useToolConfig<HabitTrackerConfig>('streak-tracker');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const streaks = config?.streaks ?? [];
-  const canAdd = streaks.length < 20;
+  const habits = config?.habits ?? [];
+  const canAdd = habits.length < 20;
+  const selectedHabit = selectedId ? habits.find((h) => h.id === selectedId) ?? null : null;
 
-  const selectedStreak = selectedId ? streaks.find((s) => s.id === selectedId) ?? null : null;
-
-  const removeStreak = useCallback(
-    (id: string) => {
+  const toggleDay = useCallback(
+    (id: string, dateKey: string) => {
       const current = config ?? DEFAULT_CONFIG;
       setConfig({
         ...current,
-        streaks: current.streaks.filter((s) => s.id !== id),
-      });
-    },
-    [config, setConfig]
-  );
-
-  const resetStreak = useCallback(
-    (id: string) => {
-      const current = config ?? DEFAULT_CONFIG;
-      setConfig({
-        ...current,
-        streaks: current.streaks.map((s) => {
-          if (s.id !== id) return s;
-          const currentDays = getDaysSince(s.startDate);
+        habits: current.habits.map((h) => {
+          if (h.id !== id) return h;
+          const has = h.completions.includes(dateKey);
           return {
-            ...s,
-            startDate: new Date().toISOString(),
-            longestDays: Math.max(s.longestDays ?? 0, currentDays),
+            ...h,
+            completions: has
+              ? h.completions.filter((c) => c !== dateKey)
+              : [...h.completions, dateKey],
           };
         }),
       });
@@ -311,83 +467,62 @@ export function StreakTrackerList() {
     [config, setConfig]
   );
 
-  const handleReset = useCallback(
-    (id: string, title: string) => {
-      const message = getRandomResetMessage();
-      Alert.alert(
-        'Reset Streak',
-        `Reset "${title}" to 0 days?\n\n${message}`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Reset',
-            style: 'destructive',
-            onPress: () => {
-              resetStreak(id);
-              setSelectedId(null);
-            },
-          },
-        ]
-      );
-    },
-    [resetStreak]
-  );
-
   const handleDelete = useCallback(
     (id: string, title: string) => {
-      Alert.alert('Delete Streak', `Delete "${title}"?`, [
+      Alert.alert('Delete Habit', `Delete "${title}"?`, [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => removeStreak(id),
+          onPress: () => {
+            setSelectedId(null);
+            const current = config ?? DEFAULT_CONFIG;
+            setConfig({ ...current, habits: current.habits.filter((h) => h.id !== id) });
+          },
         },
       ]);
     },
-    [removeStreak]
+    [config, setConfig]
   );
 
   const handleDragEnd = useCallback(
-    ({ data }: { data: Streak[] }) => {
+    ({ data }: { data: Habit[] }) => {
       const current = config ?? DEFAULT_CONFIG;
-      setConfig({ ...current, streaks: data });
+      setConfig({ ...current, habits: data });
       setIsDragging(false);
     },
     [config, setConfig]
   );
 
   const renderItem = useCallback(
-    ({ item, drag, isActive }: RenderItemParams<Streak>) => (
-      <SwipeableStreakCard
-        streak={item}
+    ({ item, drag, isActive }: RenderItemParams<Habit>) => (
+      <SwipeableHabitCard
+        habit={item}
         scheme={colorScheme}
         onCardPress={setSelectedId}
-        onReset={handleReset}
+        onToggleDay={toggleDay}
         onDelete={handleDelete}
-        drag={() => {
-          setIsDragging(true);
-          drag();
-        }}
+        drag={() => { setIsDragging(true); drag(); }}
         isActive={isActive}
         showHandle={isDragging}
       />
     ),
-    [colorScheme, handleReset, handleDelete, isDragging]
+    [colorScheme, toggleDay, handleDelete, isDragging]
   );
 
   return (
     <View style={styles.container}>
-      {streaks.length === 0 ? (
+      {habits.length === 0 ? (
         <View style={styles.emptyState}>
-          <Ionicons name="flame-outline" size={48} color={colors.secondaryText} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>No streaks yet</Text>
+          <Ionicons name="checkmark-circle-outline" size={48} color={colors.secondaryText} />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>No habits yet</Text>
           <Text style={[styles.emptyMessage, { color: colors.secondaryText }]}>
-            Tap + to start tracking your first streak
+            Tap + to start tracking your first habit
           </Text>
         </View>
       ) : (
         <DraggableFlatList
-          data={streaks}
+          data={habits}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           onDragEnd={handleDragEnd}
@@ -397,222 +532,70 @@ export function StreakTrackerList() {
       )}
       {canAdd && (
         <View style={styles.fabContainer}>
-          <Pressable
-            onPress={() => router.push('/edit-streak/new' as any)}
-            style={styles.fab}
-          >
+          <Pressable onPress={() => router.push('/edit-streak/new' as any)} style={styles.fab}>
             <Ionicons name="add" size={28} color="#fff" />
           </Pressable>
         </View>
       )}
-      <StreakDetailSheet
-        streak={selectedStreak}
+      <HabitDetailSheet
+        habit={selectedHabit}
         visible={selectedId !== null}
         onClose={() => setSelectedId(null)}
-        onReset={handleReset}
       />
     </View>
   );
 }
 
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: {
-    padding: Layout.spacing.md,
-    gap: Layout.spacing.sm,
-    flexGrow: 1,
-    paddingBottom: 100,
-  },
-  swipeableContainer: {
-    borderRadius: Layout.borderRadius.md,
-    overflow: 'hidden',
-    marginBottom: Layout.spacing.sm,
-  },
-  swipeableActive: {
-    opacity: 0.95,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  swipeActionRight: {
-    flex: 1,
-    backgroundColor: '#FF3B30',
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    paddingRight: Layout.spacing.lg,
-    borderRadius: Layout.borderRadius.md,
-  },
-  swipeActionLeft: {
-    flex: 1,
-    backgroundColor: '#FF9500',
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    paddingLeft: Layout.spacing.lg,
-    borderRadius: Layout.borderRadius.md,
-  },
-  swipeActionContent: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  swipeText: {
-    color: '#fff',
-    fontSize: Layout.fontSize.caption,
-    fontWeight: '600',
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Layout.spacing.md,
-    borderLeftWidth: 4,
-  },
-  cardContent: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: Layout.fontSize.body,
-    fontWeight: '600',
-  },
-  cardDate: {
-    fontSize: Layout.fontSize.caption,
-    marginTop: 2,
-  },
-  divider: {
-    width: 1,
-    alignSelf: 'stretch',
-    marginHorizontal: Layout.spacing.md,
-  },
-  cardRight: {
-    alignItems: 'center',
-  },
-  daysNumber: {
-    fontSize: Layout.fontSize.title,
-    fontWeight: '700',
-    lineHeight: 24,
-  },
-  daysSubLabel: {
-    fontSize: Layout.fontSize.caption,
-    fontWeight: '600',
-  },
-  dragHandle: {
-    marginLeft: Layout.spacing.sm,
-    opacity: 0.4,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 80,
-  },
-  emptyTitle: {
-    fontSize: Layout.fontSize.title,
-    fontWeight: '600',
-    marginTop: Layout.spacing.md,
-  },
-  emptyMessage: {
-    fontSize: Layout.fontSize.body,
-    marginTop: Layout.spacing.sm,
-    textAlign: 'center',
-  },
-  fabContainer: {
-    position: 'absolute',
-    bottom: Layout.spacing.xl,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  fab: {
-    backgroundColor: '#007AFF',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  // Detail sheet
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  sheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderTopWidth: 4,
-    padding: Layout.spacing.lg,
-    paddingBottom: Layout.spacing.xxl,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: Layout.spacing.lg,
-  },
-  sheetTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: Layout.spacing.lg,
-  },
-  sheetTitle: {
-    flex: 1,
-    fontSize: Layout.fontSize.heading,
-    fontWeight: '700',
-    lineHeight: 34,
-    textAlign: 'center',
-  },
-  configureButton: {
-    paddingLeft: Layout.spacing.md,
-    paddingTop: 4,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Layout.spacing.lg,
-  },
-  statBox: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: Layout.spacing.md,
-  },
-  statDivider: {
-    width: 1,
-    height: 48,
-  },
-  statNumber: {
-    fontSize: Layout.fontSize.heading,
-    fontWeight: '700',
-    lineHeight: 34,
-  },
-  statLabel: {
-    fontSize: Layout.fontSize.caption,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  resetButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FF9500',
-    padding: Layout.spacing.md,
-    borderRadius: Layout.borderRadius.md,
-    gap: Layout.spacing.sm,
-  },
-  resetButtonText: {
-    color: '#fff',
-    fontSize: Layout.fontSize.body,
-    fontWeight: '600',
-  },
+  list: { padding: Layout.spacing.md, gap: Layout.spacing.sm, flexGrow: 1, paddingBottom: 100 },
+
+  swipeableContainer: { borderRadius: Layout.borderRadius.md, overflow: 'hidden', marginBottom: Layout.spacing.sm },
+  swipeableActive: { opacity: 0.95, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 8 },
+  swipeActionRight: { flex: 1, backgroundColor: '#FF3B30', justifyContent: 'center', alignItems: 'flex-end', paddingRight: Layout.spacing.lg, borderRadius: Layout.borderRadius.md },
+  swipeActionContent: { alignItems: 'center', gap: 4 },
+  swipeText: { color: '#fff', fontSize: Layout.fontSize.caption, fontWeight: '600' },
+
+  card: { flexDirection: 'row', alignItems: 'center', paddingVertical: Layout.spacing.md, paddingLeft: Layout.spacing.md, paddingRight: Layout.spacing.sm, borderLeftWidth: 4, gap: Layout.spacing.sm },
+  cardLeft: { flex: 1 },
+  cardTitle: { fontSize: Layout.fontSize.body, fontWeight: '600' },
+  cardStreak: { fontSize: Layout.fontSize.caption, marginTop: 2 },
+  notifIcon: { marginTop: 4 },
+  dragHandle: { opacity: 0.4 },
+
+  dayRow: { flexDirection: 'row', gap: 4 },
+  dayCell: { alignItems: 'center', gap: 2 },
+  dayLabel: { fontSize: 10, fontWeight: '500' },
+  dayLabelToday: { fontWeight: '700' },
+
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
+  emptyTitle: { fontSize: Layout.fontSize.title, fontWeight: '600', marginTop: Layout.spacing.md },
+  emptyMessage: { fontSize: Layout.fontSize.body, marginTop: Layout.spacing.sm, textAlign: 'center' },
+
+  fabContainer: { position: 'absolute', bottom: Layout.spacing.xl, left: 0, right: 0, alignItems: 'center' },
+  fab: { backgroundColor: '#007AFF', width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 5 },
+
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' },
+  sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: 4, padding: Layout.spacing.lg, paddingBottom: Layout.spacing.xxl },
+  handle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: Layout.spacing.lg },
+  sheetTitleRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: Layout.spacing.lg },
+  sheetTitle: { flex: 1, fontSize: Layout.fontSize.heading, fontWeight: '700', lineHeight: 34, textAlign: 'center' },
+  configureButton: { paddingLeft: Layout.spacing.md, paddingTop: 4 },
+  statsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Layout.spacing.lg },
+  statBox: { flex: 1, alignItems: 'center', paddingVertical: Layout.spacing.sm },
+  statDivider: { width: 1, height: 40 },
+  statNumber: { fontSize: Layout.fontSize.title, fontWeight: '700' },
+  statLabel: { fontSize: Layout.fontSize.caption, fontWeight: '500', marginTop: 2, textAlign: 'center' },
+
+  gridSectionLabel: { fontSize: Layout.fontSize.caption, fontWeight: '600', letterSpacing: 0.8, marginBottom: Layout.spacing.sm },
+  gridScrollContent: { paddingBottom: 4 },
+  gridMonthRow: { flexDirection: 'row', marginBottom: 2 },
+  gridMonthLabel: { fontSize: 9, fontWeight: '500', width: 24 },
+  gridBody: { flexDirection: 'row' },
+  gridDowCol: { justifyContent: 'flex-start' },
+  gridDowLabel: { fontSize: 9, fontWeight: '500' },
+  gridCols: { flexDirection: 'row' },
+  gridCell: {},
 });

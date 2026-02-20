@@ -7,8 +7,9 @@ import {
   Pressable,
   ScrollView,
   Alert,
-  useColorScheme,
+  Switch,
   Platform,
+  useColorScheme,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,98 +17,143 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
-import { StreakTrackerConfig, Streak } from '@/src/types';
+import { HabitTrackerConfig, Habit } from '@/src/types';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
 import { DEADLINE_COLORS } from '@/src/constants/tools';
+import {
+  requestNotificationPermissions,
+  scheduleHabitNotification,
+  cancelHabitNotifications,
+} from '@/src/utils/notifications';
 
-export default function EditStreakScreen() {
+const DOW_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+export default function EditHabitScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
-  const { config, setConfig } = useToolConfig<StreakTrackerConfig>('streak-tracker');
+  const { config, setConfig } = useToolConfig<HabitTrackerConfig>('streak-tracker');
 
-  const streaks = config?.streaks ?? [];
-  const existingStreak = useMemo(
-    () => (id !== 'new' ? streaks.find((s) => s.id === id) : null),
-    [id, streaks]
+  const habits = config?.habits ?? [];
+  const existingHabit = useMemo(
+    () => (id !== 'new' ? habits.find((h) => h.id === id) : null),
+    [id, habits]
   );
 
-  const [title, setTitle] = useState(existingStreak?.title ?? '');
-  const [date, setDate] = useState<Date>(
-    existingStreak ? new Date(existingStreak.startDate) : new Date()
-  );
-  const [selectedColor, setSelectedColor] = useState<string | undefined>(
-    existingStreak?.color
-  );
-  const [showDatePicker, setShowDatePicker] = useState(Platform.OS === 'ios');
+  const [title, setTitle] = useState(existingHabit?.title ?? '');
+  const [selectedColor, setSelectedColor] = useState<string | undefined>(existingHabit?.color);
 
-  const defaultConfig: StreakTrackerConfig = {
+  // Notification state
+  const [notifEnabled, setNotifEnabled] = useState(existingHabit?.notificationEnabled ?? false);
+  const [notifTime, setNotifTime] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(existingHabit?.notificationTime?.hour ?? 9, existingHabit?.notificationTime?.minute ?? 0, 0, 0);
+    return d;
+  });
+  // undefined = every day; array = specific days (0=Sun…6=Sat)
+  const [notifDays, setNotifDays] = useState<number[] | undefined>(existingHabit?.notificationDays);
+  const [showTimePicker, setShowTimePicker] = useState(Platform.OS === 'ios');
+  const [specificDays, setSpecificDays] = useState(existingHabit?.notificationDays !== undefined);
+
+  const toggleDay = (day: number) => {
+    setNotifDays((prev) => {
+      const current = prev ?? [];
+      return current.includes(day) ? current.filter((d) => d !== day) : [...current, day];
+    });
+  };
+
+  const defaultConfig: HabitTrackerConfig = {
     toolId: 'streak-tracker',
-    streaks: [],
+    habits: [],
     notificationEnabled: false,
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const trimmed = title.trim();
     if (!trimmed) return;
 
     const currentConfig = config ?? defaultConfig;
+    const currentHabits = currentConfig.habits ?? [];
 
-    if (existingStreak) {
-      const updated: Streak = {
-        ...existingStreak,
+    // Resolve notification settings
+    let newNotifId: string | undefined = existingHabit?.notificationId;
+
+    if (notifEnabled) {
+      const granted = await requestNotificationPermissions();
+      if (!granted) {
+        Alert.alert('Permission Required', 'Please enable notifications in your device settings.');
+        return;
+      }
+      // Cancel old notifications before rescheduling
+      await cancelHabitNotifications(newNotifId);
+      const days = specificDays ? (notifDays ?? []) : undefined;
+      newNotifId = await scheduleHabitNotification(
+        trimmed,
+        notifTime.getHours(),
+        notifTime.getMinutes(),
+        days,
+      );
+    } else {
+      // Notifications turned off — cancel any existing
+      await cancelHabitNotifications(newNotifId);
+      newNotifId = undefined;
+    }
+
+    if (existingHabit) {
+      const updated: Habit = {
+        ...existingHabit,
         title: trimmed,
-        startDate: date.toISOString(),
         color: selectedColor,
+        notificationEnabled: notifEnabled,
+        notificationTime: notifEnabled ? { hour: notifTime.getHours(), minute: notifTime.getMinutes() } : undefined,
+        notificationDays: notifEnabled && specificDays ? (notifDays ?? []) : undefined,
+        notificationId: newNotifId,
       };
       setConfig({
         ...currentConfig,
-        streaks: currentConfig.streaks.map((s) =>
-          s.id === existingStreak.id ? updated : s
-        ),
+        habits: currentHabits.map((h) => (h.id === existingHabit.id ? updated : h)),
       });
     } else {
-      if (currentConfig.streaks.length >= 20) return;
-      const newStreak: Streak = {
-        id: `sk-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      if (currentHabits.length >= 20) return;
+      const newHabit: Habit = {
+        id: `hb-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         title: trimmed,
-        startDate: date.toISOString(),
         color: selectedColor,
+        completions: [],
         createdAt: new Date().toISOString(),
+        notificationEnabled: notifEnabled,
+        notificationTime: notifEnabled ? { hour: notifTime.getHours(), minute: notifTime.getMinutes() } : undefined,
+        notificationDays: notifEnabled && specificDays ? (notifDays ?? []) : undefined,
+        notificationId: newNotifId,
       };
-      setConfig({
-        ...currentConfig,
-        streaks: [...currentConfig.streaks, newStreak],
-      });
+      setConfig({ ...currentConfig, habits: [...currentHabits, newHabit] });
     }
     router.back();
   };
 
   const handleDelete = () => {
-    if (!existingStreak || !config) return;
-    Alert.alert('Delete Streak', `Delete "${existingStreak.title}"?`, [
+    if (!existingHabit || !config) return;
+    Alert.alert('Delete Habit', `Delete "${existingHabit.title}"?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: () => {
-          setConfig({
-            ...config,
-            streaks: config.streaks.filter((s) => s.id !== existingStreak.id),
-          });
+        onPress: async () => {
+          await cancelHabitNotifications(existingHabit.notificationId);
+          setConfig({ ...config, habits: config.habits.filter((h) => h.id !== existingHabit.id) });
           router.back();
         },
       },
     ]);
   };
 
-  const formatDisplayDate = (d: Date) => {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
-    ];
-    return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  const formatTime = (d: Date) => {
+    const h = d.getHours();
+    const m = d.getMinutes();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
   };
 
   return (
@@ -117,15 +163,10 @@ export default function EditStreakScreen() {
           <Text style={[styles.headerButton, { color: colors.tint }]}>Cancel</Text>
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
-          {existingStreak ? 'Edit Streak' : 'New Streak'}
+          {existingHabit ? 'Edit Habit' : 'New Habit'}
         </Text>
         <Pressable onPress={handleSave} disabled={!title.trim()}>
-          <Text
-            style={[
-              styles.headerButton,
-              { color: colors.tint, opacity: title.trim() ? 1 : 0.4 },
-            ]}
-          >
+          <Text style={[styles.headerButton, { color: colors.tint, opacity: title.trim() ? 1 : 0.4 }]}>
             Save
           </Text>
         </Pressable>
@@ -135,46 +176,13 @@ export default function EditStreakScreen() {
         {/* Title */}
         <Text style={[styles.label, { color: colors.text }]}>Title</Text>
         <TextInput
-          style={[
-            styles.input,
-            { color: colors.text, backgroundColor: colors.cardBackground },
-          ]}
+          style={[styles.input, { color: colors.text, backgroundColor: colors.cardBackground }]}
           value={title}
           onChangeText={setTitle}
-          placeholder="Streak name"
+          placeholder="Habit name"
           placeholderTextColor={colors.secondaryText}
           autoFocus={id === 'new'}
         />
-
-        {/* Start Date */}
-        <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
-          Start Date
-        </Text>
-        {Platform.OS === 'android' && (
-          <Pressable
-            onPress={() => setShowDatePicker(true)}
-            style={[styles.dateButton, { backgroundColor: colors.cardBackground }]}
-          >
-            <Ionicons name="calendar-outline" size={20} color={colors.tint} />
-            <Text style={[styles.dateButtonText, { color: colors.text }]}>
-              {formatDisplayDate(date)}
-            </Text>
-          </Pressable>
-        )}
-        {showDatePicker && (
-          <DateTimePicker
-            value={date}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
-            maximumDate={new Date()}
-            onChange={(_, selectedDate) => {
-              if (Platform.OS === 'android') setShowDatePicker(false);
-              if (selectedDate) setDate(selectedDate);
-            }}
-            themeVariant={colorScheme}
-            style={Platform.OS === 'ios' ? styles.iosDatePicker : undefined}
-          />
-        )}
 
         {/* Color */}
         <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
@@ -207,16 +215,102 @@ export default function EditStreakScreen() {
           })}
         </View>
 
+        {/* Reminder */}
+        <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
+          Reminders
+        </Text>
+        <View style={[styles.notifCard, { backgroundColor: colors.cardBackground }]}>
+          <View style={styles.notifToggleRow}>
+            <Text style={[styles.notifToggleLabel, { color: colors.text }]}>Enable reminder</Text>
+            <Switch
+              value={notifEnabled}
+              onValueChange={setNotifEnabled}
+              trackColor={{ true: colors.tint }}
+            />
+          </View>
+
+          {notifEnabled && (
+            <>
+              {/* Row 1: Time */}
+              <View style={[styles.notifDivider, { backgroundColor: colors.separator }]} />
+              <View style={styles.notifRow}>
+                <Text style={[styles.notifRowLabel, { color: colors.text }]}>Time</Text>
+                <View style={styles.notifRowRight}>
+                  {Platform.OS === 'android' && (
+                    <Pressable onPress={() => setShowTimePicker(true)}>
+                      <Text style={[styles.notifTimeText, { color: colors.tint }]}>
+                        {formatTime(notifTime)}
+                      </Text>
+                    </Pressable>
+                  )}
+                  {showTimePicker && (
+                    <DateTimePicker
+                      value={notifTime}
+                      mode="time"
+                      display={Platform.OS === 'ios' ? 'compact' : 'default'}
+                      onChange={(_, selected) => {
+                        if (Platform.OS === 'android') setShowTimePicker(false);
+                        if (selected) setNotifTime(selected);
+                      }}
+                      themeVariant={colorScheme}
+                    />
+                  )}
+                </View>
+              </View>
+
+              {/* Row 2: Daily / Specific days toggle */}
+              <View style={[styles.notifDivider, { backgroundColor: colors.separator }]} />
+              <View style={styles.notifRow}>
+                <Text style={[styles.notifRowLabel, { color: colors.text }]}>
+                  {specificDays ? 'Specific days' : 'Daily'}
+                </Text>
+                <Switch
+                  value={specificDays}
+                  onValueChange={(v) => {
+                    setSpecificDays(v);
+                    if (!v) setNotifDays(undefined);
+                    else setNotifDays([]);
+                  }}
+                  trackColor={{ true: colors.tint }}
+                />
+              </View>
+
+              {specificDays && (
+                <View style={styles.dowRow}>
+                  {DOW_LABELS.map((label, day) => {
+                    const selected = (notifDays ?? []).includes(day);
+                    return (
+                      <Pressable
+                        key={day}
+                        onPress={() => toggleDay(day)}
+                        style={[
+                          styles.dowChip,
+                          {
+                            backgroundColor: selected ? colors.tint : colors.background,
+                            borderColor: selected ? colors.tint : colors.cardBorder,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.dowChipText, { color: selected ? '#fff' : colors.secondaryText }]}>
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+            </>
+          )}
+        </View>
+
         {/* Delete button for existing */}
-        {existingStreak && (
+        {existingHabit && (
           <Pressable
             onPress={handleDelete}
             style={[styles.deleteButton, { borderColor: colors.destructive }]}
           >
             <Ionicons name="trash-outline" size={18} color={colors.destructive} />
-            <Text style={[styles.deleteText, { color: colors.destructive }]}>
-              Delete Streak
-            </Text>
+            <Text style={[styles.deleteText, { color: colors.destructive }]}>Delete Habit</Text>
           </Pressable>
         )}
       </ScrollView>
@@ -234,46 +328,12 @@ const styles = StyleSheet.create({
     paddingVertical: Layout.spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitle: {
-    fontSize: Layout.fontSize.title,
-    fontWeight: '600',
-  },
-  headerButton: {
-    fontSize: Layout.fontSize.body,
-    fontWeight: '500',
-  },
-  content: {
-    padding: Layout.spacing.md,
-    paddingBottom: 40,
-  },
-  label: {
-    fontSize: Layout.fontSize.body,
-    fontWeight: '600',
-    marginBottom: Layout.spacing.sm,
-  },
-  input: {
-    fontSize: Layout.fontSize.body,
-    padding: Layout.spacing.md,
-    borderRadius: Layout.borderRadius.md,
-  },
-  dateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Layout.spacing.md,
-    borderRadius: Layout.borderRadius.md,
-    gap: Layout.spacing.sm,
-  },
-  dateButtonText: {
-    fontSize: Layout.fontSize.body,
-  },
-  iosDatePicker: {
-    alignSelf: 'center',
-  },
-  colorRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Layout.spacing.sm,
-  },
+  headerTitle: { fontSize: Layout.fontSize.title, fontWeight: '600' },
+  headerButton: { fontSize: Layout.fontSize.body, fontWeight: '500' },
+  content: { padding: Layout.spacing.md, paddingBottom: 60 },
+  label: { fontSize: Layout.fontSize.body, fontWeight: '600', marginBottom: Layout.spacing.sm },
+  input: { fontSize: Layout.fontSize.body, padding: Layout.spacing.md, borderRadius: Layout.borderRadius.md },
+  colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Layout.spacing.sm },
   colorChip: {
     width: 36,
     height: 36,
@@ -283,6 +343,49 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
+
+  notifCard: {
+    borderRadius: Layout.borderRadius.md,
+    overflow: 'hidden',
+  },
+  notifToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Layout.spacing.md,
+    paddingVertical: Layout.spacing.sm,
+  },
+  notifToggleLabel: { fontSize: Layout.fontSize.body },
+  notifDivider: { height: StyleSheet.hairlineWidth },
+  notifRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Layout.spacing.md,
+    paddingVertical: Layout.spacing.sm,
+    minHeight: 44,
+  },
+  notifRowLabel: { fontSize: Layout.fontSize.body },
+  notifRowRight: { alignItems: 'flex-end', justifyContent: 'center' },
+  notifTimeText: { fontSize: Layout.fontSize.body },
+  dowRow: {
+    flexDirection: 'row',
+    gap: Layout.spacing.sm,
+    paddingHorizontal: Layout.spacing.md,
+    paddingBottom: Layout.spacing.md,
+    paddingTop: Layout.spacing.sm,
+    flexWrap: 'wrap',
+  },
+  dowChip: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  dowChipText: { fontSize: Layout.fontSize.caption, fontWeight: '600' },
+
   deleteButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -293,8 +396,5 @@ const styles = StyleSheet.create({
     marginTop: Layout.spacing.xl,
     gap: Layout.spacing.sm,
   },
-  deleteText: {
-    fontSize: Layout.fontSize.body,
-    fontWeight: '500',
-  },
+  deleteText: { fontSize: Layout.fontSize.body, fontWeight: '500' },
 });
