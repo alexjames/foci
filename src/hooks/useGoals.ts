@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Goal } from '../types';
+import { DEADLINE_COLORS } from '../constants/tools';
 
 export function useGoals() {
   const { state, dispatch } = useAppContext();
@@ -8,8 +9,11 @@ export function useGoals() {
   const addGoal = useCallback(
     (goal: Omit<Goal, 'id' | 'createdAt' | 'updatedAt' | 'order'>) => {
       const now = new Date().toISOString();
+      const usedColors = new Set(state.goals.map((g) => g.color));
+      const availableColor = DEADLINE_COLORS.find((c) => !usedColors.has(c.id));
       const newGoal: Goal = {
         ...goal,
+        color: availableColor?.id ?? DEADLINE_COLORS[0].id,
         id: Date.now().toString() + Math.random().toString(36).slice(2, 9),
         createdAt: now,
         updatedAt: now,
@@ -18,7 +22,7 @@ export function useGoals() {
       dispatch({ type: 'ADD_GOAL', payload: newGoal });
       return newGoal;
     },
-    [state.goals.length, dispatch]
+    [state.goals, dispatch]
   );
 
   const updateGoal = useCallback(

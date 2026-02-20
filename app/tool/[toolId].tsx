@@ -17,7 +17,7 @@ import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
 import { ToolId, MementoMoriConfig, AffirmationsConfig, BreathingConfig, Goal } from '@/src/types';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
-import { TOOL_REGISTRY } from '@/src/constants/tools';
+import { TOOL_REGISTRY, DEADLINE_COLORS } from '@/src/constants/tools';
 
 // Memento imports
 import { useGoals } from '@/src/hooks/useGoals';
@@ -124,6 +124,12 @@ function MementoView() {
   );
 }
 
+function getGoalColor(colorId: string | undefined, scheme: 'light' | 'dark'): string {
+  const found = DEADLINE_COLORS.find((c) => c.id === colorId);
+  if (found) return scheme === 'dark' ? found.dark : found.light;
+  return scheme === 'dark' ? '#7ECECE' : '#7ECECE';
+}
+
 function GoalDeleteAction() {
   return (
     <View style={styles.goalSwipeAction}>
@@ -153,6 +159,7 @@ function SwipeableGoalCard({
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const swipeableRef = React.useRef<Swipeable>(null);
+  const accentColor = getGoalColor(goal.color, colorScheme);
 
   return (
     <ScaleDecorator>
@@ -178,7 +185,7 @@ function SwipeableGoalCard({
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               drag();
             }}
-            style={[styles.goalRow, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}
+            style={[styles.goalRow, { backgroundColor: colors.cardBackground, borderLeftColor: accentColor }]}
           >
             <View style={styles.goalInfo}>
               <Text style={[styles.goalName, { color: colors.text }]}>{goal.name}</Text>
@@ -230,7 +237,7 @@ function GoalsView() {
     <View>
       {canAddGoal && (
         <View style={styles.goalsAddRow}>
-          <Pressable onPress={() => router.push('/edit-goal/new')} style={[styles.goalsAddButton, { borderColor: colors.cardBorder }]}>
+          <Pressable onPress={() => router.push('/new-goal')} style={[styles.goalsAddButton, { borderColor: colors.cardBorder }]}>
             <Ionicons name="add" size={20} color={colors.secondaryText} />
           </Pressable>
         </View>
@@ -251,7 +258,7 @@ function GoalsView() {
       <View style={{ flex: 1 }}>
         <EmptyState title="No Goals Yet" message="Tap the + button to add your first goal." />
         <View style={styles.goalsAddRow}>
-          <Pressable onPress={() => router.push('/edit-goal/new')} style={[styles.goalsAddButton, { borderColor: colors.cardBorder }]}>
+          <Pressable onPress={() => router.push('/new-goal')} style={[styles.goalsAddButton, { borderColor: colors.cardBorder }]}>
             <Ionicons name="add" size={20} color={colors.secondaryText} />
           </Pressable>
         </View>
@@ -448,8 +455,7 @@ const styles = StyleSheet.create({
   goalRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: Layout.borderRadius.md,
+    borderLeftWidth: 4,
     padding: Layout.spacing.md,
     gap: Layout.spacing.sm,
   },

@@ -122,6 +122,14 @@ function RootNavigator() {
             presentation: 'modal',
           }}
         />
+        <Stack.Screen
+          name="new-goal"
+          options={{
+            headerShown: false,
+            presentation: 'fullScreenModal',
+            animation: 'slide_from_bottom',
+          }}
+        />
         <Stack.Screen name="+not-found" />
       </Stack>
     </ThemeProvider>

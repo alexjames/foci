@@ -194,9 +194,13 @@ export interface ChecklistCompletion {
 export interface Goal {
   id: string;
   name: string;
+  color?: string;
   outcome?: string;
   why?: string;
   consequences?: string;
+  dueDate?: string;      // ISO date string
+  measurement?: string;  // how to track progress
+  signature?: string;    // JSON of {paths: Point[][], viewBox: string}
   createdAt: string;
   updatedAt: string;
   order: number;

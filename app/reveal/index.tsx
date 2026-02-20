@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, useColorScheme } from 'react-native';
+import { StyleSheet, useColorScheme, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TypewriterText } from '@/src/components/TypewriterText';
@@ -76,7 +76,8 @@ export default function RevealScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <Pressable style={[styles.container, { backgroundColor: colors.background }]} onPress={() => router.back()}>
+    <SafeAreaView style={styles.safeArea}>
       <View style={[styles.progressContainer, { backgroundColor: 'transparent' }]}>
         <Text style={[styles.progressText, { color: colors.secondaryText }]}>
           {currentGoalIndex + 1} / {goals.length}
@@ -111,11 +112,15 @@ export default function RevealScreen() {
 
       <CommitButton onPress={handleCommit} visible={showCommit} />
     </SafeAreaView>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  safeArea: {
     flex: 1,
   },
   centerContent: {
