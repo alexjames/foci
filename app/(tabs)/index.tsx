@@ -11,6 +11,7 @@ import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
 import { useTools } from '@/src/hooks/useTools';
 import { ToolGrid } from '@/src/components/home/ToolGrid';
+import { BriefingCard } from '@/src/components/home/BriefingCard';
 
 function formatDate(date: Date): string {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -26,7 +27,8 @@ export default function HomeScreen() {
   const colors = Colors[colorScheme];
   const router = useRouter();
   const { orderedTools, reorderHomeTools } = useTools();
-  const [headerHeight, setHeaderHeight] = useState(0);
+  // Measure the full area above the grid so ghost card Y offset is correct
+  const [aboveGridHeight, setAboveGridHeight] = useState(0);
   const dateText = useMemo(() => formatDate(new Date()), []);
 
   const handlePress = useCallback(
@@ -40,17 +42,19 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scroll}
         scrollEventThrottle={16}
       >
-        <View
-          onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
-          style={styles.dateHeader}
-        >
-          <Text style={[styles.dateText, { color: colors.secondaryText }]}>{dateText}</Text>
+        {/* Everything above the grid — measured together for ghost Y offset */}
+        <View onLayout={(e) => setAboveGridHeight(e.nativeEvent.layout.height)}>
+          <View style={styles.dateHeader}>
+            <Text style={[styles.dateText, { color: colors.secondaryText }]}>{dateText}</Text>
+          </View>
+          <BriefingCard />
         </View>
+
         <ToolGrid
           tools={orderedTools}
           onReorder={reorderHomeTools}
           onPress={handlePress}
-          headerHeight={headerHeight}
+          headerHeight={aboveGridHeight}
         />
       </ScrollView>
     </View>
