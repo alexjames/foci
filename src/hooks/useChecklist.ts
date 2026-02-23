@@ -2,9 +2,14 @@ import { useCallback, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { ChecklistCompletion, ChecklistItem, RecurrenceType } from '../types';
 
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 export function isDueOnDate(item: ChecklistItem, date: Date): boolean {
   const day = date.getDay(); // 0=Sun, 6=Sat
-  const startDate = new Date(item.startDate);
+  const startDate = parseLocalDate(item.startDate);
 
   switch (item.recurrence) {
     case 'once': {

@@ -10,6 +10,9 @@ import {
   Modal,
   StatusBar,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -709,6 +712,19 @@ function TodayTab() {
   const [quickAddText, setQuickAddText] = useState('');
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const inputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const quickAddRowRef = useRef<View>(null);
+  const keyboardTopRef = useRef<number>(0);
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardWillShow', (e) => {
+      keyboardTopRef.current = e.endCoordinates.screenY;
+    });
+    const hide = Keyboard.addListener('keyboardWillHide', () => {
+      keyboardTopRef.current = 0;
+    });
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   const handleToggle = useCallback(
     (item: ChecklistItem, date: Date) => {
@@ -745,11 +761,24 @@ function TodayTab() {
     [toggleCompletion, today, animatingIds, pendingComplete, isCompleted]
   );
 
+  const scrollOffsetRef = useRef(0);
+
   const commitQuickAdd = useCallback(() => {
     const title = quickAddText.trim();
     if (!title) return;
     addItem({ title, recurrence: 'daily' });
     setQuickAddText('');
+    setTimeout(() => {
+      const kbTop = keyboardTopRef.current;
+      if (!kbTop || !quickAddRowRef.current) return;
+      quickAddRowRef.current.measure((_x, _y, _w, h, _pageX, pageY) => {
+        const rowBottom = pageY + h;
+        const overlap = rowBottom - kbTop;
+        if (overlap > 0) {
+          scrollRef.current?.scrollTo({ y: scrollOffsetRef.current + overlap + 8, animated: true });
+        }
+      });
+    }, 50);
   }, [quickAddText, addItem]);
 
   const handleSubmitEditing = useCallback(() => {
@@ -906,7 +935,6 @@ function TodayTab() {
   );
 
   const hasAnything = todayItems.length > 0 || tomorrowAllEntries.length > 0 || weekAllEntries.length > 0;
-  const showQuickAddRow = showQuickAdd || allCompleted.length > 0;
 
   return (
     <>
@@ -920,7 +948,21 @@ function TodayTab() {
           isCompleted={isCompleted}
         />
       )}
-      <ScrollView style={styles.tabContent} contentContainerStyle={styles.listContent}>
+      <KeyboardAvoidingView
+        style={styles.tabContent}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={88}
+      >
+      <ScrollView
+        ref={scrollRef}
+        style={styles.flex1}
+        contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+        onScroll={(e) => { scrollOffsetRef.current = e.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={16}
+      >
       {!hasAnything ? (
         <View style={styles.emptyState}>
           <Ionicons name="checkmark-done-outline" size={48} color={colors.secondaryText} />
@@ -942,8 +984,8 @@ function TodayTab() {
           />
 
           {/* Quick-add row */}
-          {showQuickAddRow && (
-            <View style={[styles.quickAddRow, { backgroundColor: colors.cardBackground }]}>
+          {todayOpen && (
+            <View ref={quickAddRowRef} style={[styles.quickAddRow, { backgroundColor: colors.cardBackground }]}>
               <Pressable
                 onPress={() => {
                   setShowQuickAdd(true);
@@ -1021,6 +1063,7 @@ function TodayTab() {
         </>
       )}
     </ScrollView>
+      </KeyboardAvoidingView>
     </>
   );
 }
@@ -1250,6 +1293,9 @@ const styles = StyleSheet.create({
     borderRadius: 1,
   },
   tabContent: {
+    flex: 1,
+  },
+  flex1: {
     flex: 1,
   },
   listContent: {
