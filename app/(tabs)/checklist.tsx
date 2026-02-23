@@ -20,6 +20,7 @@ import DraggableFlatList, {
   RenderItemParams,
   ScaleDecorator,
 } from 'react-native-draggable-flatlist';
+import { Swipeable } from 'react-native-gesture-handler';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -156,7 +157,7 @@ function TodayTab() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
-  const { getItemsForDate, isCompleted, toggleCompletion, addItem, items } = useChecklist();
+  const { getItemsForDate, isCompleted, toggleCompletion, addItem, deleteItem, items } = useChecklist();
   const today = useMemo(() => startOfDay(new Date()), []);
   const tomorrow = useMemo(() => addDays(today, 1), [today]);
 
@@ -194,10 +195,13 @@ function TodayTab() {
 
   // Optimistic completion: item IDs checked off but not yet reflected in context state
   const [pendingComplete, setPendingComplete] = useState<Set<string>>(new Set());
+  // Items animating (strikethrough shown for 1s before moving to Completed)
+  const [animatingIds, setAnimatingIds] = useState<Set<string>>(new Set());
+  const animTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const todayPendingFiltered = useMemo(
     () => todayPending.filter((item) => !pendingComplete.has(item.id)),
-    [todayPending, pendingComplete]
+    [todayPending, pendingComplete, animatingIds]
   );
   const todayCompletedWithPending = useMemo(
     () => [
@@ -248,20 +252,36 @@ function TodayTab() {
 
   const handleToggle = useCallback(
     (item: ChecklistItem, date: Date) => {
-      // Optimistically move today's items immediately; for other days just toggle
       if (date === today) {
-        setPendingComplete((prev) => {
-          const next = new Set(prev);
-          if (next.has(item.id)) next.delete(item.id);
-          else next.add(item.id);
-          return next;
-        });
+        const id = item.id;
+        const isAnimating = animatingIds.has(id);
+        const isPending = pendingComplete.has(id);
+        const alreadyDone = isCompleted(id, today);
+        if (isAnimating) {
+          // Cancel the pending animation (un-check)
+          clearTimeout(animTimers.current[id]);
+          delete animTimers.current[id];
+          setAnimatingIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
+        } else if (isPending || alreadyDone) {
+          // Remove from optimistic pending if present (un-complete)
+          setPendingComplete((prev) => { const s = new Set(prev); s.delete(id); return s; });
+        } else {
+          // Start 1-second strikethrough animation then move to Completed
+          setAnimatingIds((prev) => new Set(prev).add(id));
+          animTimers.current[id] = setTimeout(() => {
+            setAnimatingIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
+            setPendingComplete((prev) => new Set(prev).add(id));
+            delete animTimers.current[id];
+          }, 1000);
+        }
+        toggleCompletion(item.id, date);
+      } else {
+        toggleCompletion(item.id, date);
       }
-      toggleCompletion(item.id, date);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setShowQuickAdd(true);
     },
-    [toggleCompletion, today]
+    [toggleCompletion, today, animatingIds, pendingComplete, isCompleted]
   );
 
   const commitQuickAdd = useCallback(() => {
@@ -283,8 +303,12 @@ function TodayTab() {
   // Refs for stable render callback
   const handleToggleRef = useRef(handleToggle);
   const colorsRef = useRef(colors);
+  const animatingIdsRef = useRef(animatingIds);
+  const deleteItemRef = useRef(deleteItem);
   handleToggleRef.current = handleToggle;
   colorsRef.current = colors;
+  animatingIdsRef.current = animatingIds;
+  deleteItemRef.current = deleteItem;
 
   const handleSectionDragEnd = useCallback(
     (section: SectionId, newOrder: DragItem[]) => {
@@ -300,48 +324,78 @@ function TodayTab() {
     ({ item: entry, drag, isActive }: RenderItemParams<DragItem>) => {
       const colors = colorsRef.current;
       const { item, date, section } = entry;
+      const completing = animatingIdsRef.current.has(item.id);
       return (
         <ScaleDecorator>
-          <View
-            style={[
-              styles.itemRow,
-              { backgroundColor: colors.cardBackground },
-              isActive && styles.itemRowActive,
-            ]}
-          >
-            <Pressable
-              onPress={() => handleToggleRef.current(item, date)}
-              hitSlop={8}
-            >
-              <Ionicons name="square-outline" size={24} color={colors.secondaryText} />
-            </Pressable>
-            <Pressable
-              style={styles.itemRowContent}
-              onLongPress={() => {
-                isDragging.current = true;
+          <Swipeable
+            renderRightActions={() => (
+              <View style={styles.swipeDeleteAction}>
+                <Ionicons name="trash-outline" size={22} color="#fff" />
+                <Text style={styles.swipeDeleteText}>Delete</Text>
+              </View>
+            )}
+            onSwipeableOpen={(direction) => {
+              if (direction === 'right') {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                drag();
-              }}
-              delayLongPress={300}
+                deleteItemRef.current(item.id);
+              }
+            }}
+            overshootRight={false}
+            enabled={!isActive}
+          >
+            <View
+              style={[
+                styles.itemRow,
+                { backgroundColor: colors.cardBackground },
+                isActive && styles.itemRowActive,
+              ]}
             >
-              <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
-                {item.title}
-              </Text>
-              {section === 'week' && !isActive && (
-                <Text style={[styles.weekDateLabel, { color: colors.secondaryText }]}>
-                  {formatDisplayDate(date)}
-                </Text>
-              )}
-              {isActive && (
+              <Pressable
+                onPress={() => handleToggleRef.current(item, date)}
+                hitSlop={8}
+              >
                 <Ionicons
-                  name="reorder-three-outline"
-                  size={20}
-                  color={colors.secondaryText}
-                  style={{ opacity: 0.4 }}
+                  name={completing ? 'checkbox' : 'square-outline'}
+                  size={24}
+                  color={completing ? colors.tint : colors.secondaryText}
                 />
-              )}
-            </Pressable>
-          </View>
+              </Pressable>
+              <Pressable
+                style={styles.itemRowContent}
+                onLongPress={() => {
+                  isDragging.current = true;
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  drag();
+                }}
+                delayLongPress={300}
+              >
+                <Text
+                  style={[
+                    styles.itemTitle,
+                    completing
+                      ? { color: colors.secondaryText, textDecorationLine: 'line-through' }
+                      : { color: colors.text },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {item.title}
+                </Text>
+                {section === 'week' && !isActive && !completing && (
+                  <Text style={[styles.weekDateLabel, { color: colors.secondaryText }]}>
+                    {formatDisplayDate(date)}
+                  </Text>
+                )}
+                {isActive && (
+                  <Ionicons
+                    name="reorder-three-outline"
+                    size={20}
+                    color={colors.secondaryText}
+                    style={{ opacity: 0.4 }}
+                  />
+                )}
+              </Pressable>
+            </View>
+          </Swipeable>
         </ScaleDecorator>
       );
     },
@@ -700,6 +754,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 8,
     elevation: 8,
+  },
+  swipeDeleteAction: {
+    flex: 1,
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingRight: Layout.spacing.lg,
+    borderRadius: Layout.borderRadius.md,
+    marginBottom: Layout.spacing.sm,
+  },
+  swipeDeleteText: {
+    color: '#fff',
+    fontSize: Layout.fontSize.caption,
+    fontWeight: '600',
+    marginTop: 2,
   },
   itemRowContent: {
     flex: 1,
