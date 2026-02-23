@@ -11,7 +11,7 @@ import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
 import { useChecklist, isDueOnDate } from '@/src/hooks/useChecklist';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
-import { DeadlineTrackerConfig, HabitTrackerConfig, RoutinesConfig } from '@/src/types';
+import { DeadlineTrackerConfig, HabitTrackerConfig, RoutinesConfig, EventsConfig, EventRecurrence } from '@/src/types';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -25,6 +25,42 @@ function getDaysUntil(dateStr: string): number {
   const target = new Date(dateStr);
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const targetStart = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  return Math.round((targetStart.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function getDaysUntilNextOccurrence(dateStr: string, recurrence?: EventRecurrence): number {
+  const now = new Date();
+  const target = new Date(dateStr);
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const targetStart = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const rec = recurrence ?? { type: 'none' };
+
+  if (rec.type === 'none') {
+    return Math.round((targetStart.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
+  }
+  if (rec.type === 'annually') {
+    const thisYear = new Date(now.getFullYear(), target.getMonth(), target.getDate());
+    const next = thisYear >= todayStart ? thisYear : new Date(now.getFullYear() + 1, target.getMonth(), target.getDate());
+    return Math.round((next.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
+  }
+  if (rec.type === 'monthly') {
+    const dayOfMonth = target.getDate();
+    let candidate = new Date(now.getFullYear(), now.getMonth(), dayOfMonth);
+    if (candidate < todayStart) candidate = new Date(now.getFullYear(), now.getMonth() + 1, dayOfMonth);
+    return Math.round((candidate.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
+  }
+  if (rec.type === 'every-x-months') {
+    const intervalMs = rec.months * 30 * 24 * 60 * 60 * 1000;
+    let next = new Date(targetStart);
+    while (next < todayStart) next = new Date(next.getTime() + intervalMs);
+    return Math.round((next.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
+  }
+  if (rec.type === 'every-x-days') {
+    const intervalMs = rec.days * 24 * 60 * 60 * 1000;
+    let next = new Date(targetStart);
+    while (next < todayStart) next = new Date(next.getTime() + intervalMs);
+    return Math.round((next.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
+  }
   return Math.round((targetStart.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
 }
 
@@ -90,7 +126,17 @@ export function BriefingCard() {
   const { config: habitConfig } = useToolConfig<HabitTrackerConfig>('streak-tracker');
   const habitCount = habitConfig?.habits?.length ?? 0;
 
-  const hasAny = pendingTodos > 0 || upcomingDeadlines > 0 || routineCount > 0 || habitCount > 0;
+  // Events: upcoming in the next 30 days
+  const { config: eventsConfig } = useToolConfig<EventsConfig>('events');
+  const upcomingEvents = useMemo(() => {
+    const events = eventsConfig?.events ?? [];
+    return events.filter((e) => {
+      const days = getDaysUntilNextOccurrence(e.date, e.recurrence);
+      return days >= 0 && days <= 30;
+    }).length;
+  }, [eventsConfig]);
+
+  const hasAny = pendingTodos > 0 || upcomingDeadlines > 0 || routineCount > 0 || habitCount > 0 || upcomingEvents > 0;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
@@ -101,6 +147,7 @@ export function BriefingCard() {
           <View style={styles.rows}>
             <BriefingRow count={pendingTodos} label="to-do items pending" toolId="checklist" />
             <BriefingRow count={upcomingDeadlines} label="deadlines upcoming" toolId="deadline-tracker" />
+            <BriefingRow count={upcomingEvents} label="events this month" toolId="events" />
             <BriefingRow count={routineCount} label="routines to get to" toolId="routines" />
             <BriefingRow count={habitCount} label="habits to work on" toolId="streak-tracker" />
           </View>

@@ -81,6 +81,14 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     description:
       '100 curated motivational quotes from stoic philosophers, leaders, athletes, and thinkers. One quote at a time, full screen.',
   },
+  {
+    id: 'events',
+    name: 'Events',
+    tagline: 'Mark what matters',
+    icon: 'gift-outline',
+    description:
+      'Track birthdays, anniversaries, holidays and more. See upcoming events at a glance and count down to what matters most.',
+  },
 ];
 
 export const FOCUS_TIMER_PRESETS = [
@@ -139,6 +147,25 @@ export const ROUTINE_ICONS = [
   'book-outline', 'cafe-outline', 'bicycle-outline', 'barbell-outline',
   'leaf-outline', 'heart-outline', 'water-outline', 'musical-notes-outline',
   'walk-outline', 'bed-outline', 'briefcase-outline', 'school-outline',
+];
+
+export const EVENT_ICONS: { id: string; icon: string; label: string }[] = [
+  { id: 'gift-outline',           icon: 'gift-outline',           label: 'Birthday' },
+  { id: 'heart-outline',          icon: 'heart-outline',          label: 'Anniversary' },
+  { id: 'star-outline',           icon: 'star-outline',           label: 'Holiday' },
+  { id: 'home-outline',           icon: 'home-outline',           label: 'Home' },
+  { id: 'airplane-outline',       icon: 'airplane-outline',       label: 'Travel' },
+  { id: 'school-outline',         icon: 'school-outline',         label: 'School' },
+  { id: 'briefcase-outline',      icon: 'briefcase-outline',      label: 'Work' },
+  { id: 'medical-outline',        icon: 'medical-outline',        label: 'Health' },
+  { id: 'musical-notes-outline',  icon: 'musical-notes-outline',  label: 'Concert' },
+  { id: 'restaurant-outline',     icon: 'restaurant-outline',     label: 'Dinner' },
+  { id: 'trophy-outline',         icon: 'trophy-outline',         label: 'Achievement' },
+  { id: 'people-outline',         icon: 'people-outline',         label: 'Family' },
+  { id: 'game-controller-outline',icon: 'game-controller-outline',label: 'Fun' },
+  { id: 'ribbon-outline',         icon: 'ribbon-outline',         label: 'Special' },
+  { id: 'earth-outline',          icon: 'earth-outline',          label: 'World' },
+  { id: 'sunny-outline',          icon: 'sunny-outline',          label: 'Summer' },
 ];
 
 export const DEADLINE_REMINDER_OPTIONS: { value: DeadlineReminderType; label: string }[] = [

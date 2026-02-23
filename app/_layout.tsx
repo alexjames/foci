@@ -88,6 +88,13 @@ function RootNavigator() {
           }}
         />
         <Stack.Screen
+          name="edit-event/[id]"
+          options={{
+            headerShown: false,
+            presentation: 'modal',
+          }}
+        />
+        <Stack.Screen
           name="edit-streak/[id]"
           options={{
             headerShown: false,

@@ -1,6 +1,6 @@
 // === TOOL SYSTEM ===
 
-export type ToolId = 'memento-mori' | 'goals' | 'affirmations' | 'breathing' | 'focus-timer' | 'deadline-tracker' | 'morning-routine' | 'evening-routine' | 'streak-tracker' | 'tally-counter' | 'routines' | 'motivational-quotes';
+export type ToolId = 'memento-mori' | 'goals' | 'affirmations' | 'breathing' | 'focus-timer' | 'deadline-tracker' | 'morning-routine' | 'evening-routine' | 'streak-tracker' | 'tally-counter' | 'routines' | 'motivational-quotes' | 'events';
 
 export interface ToolDefinition {
   id: ToolId;
@@ -163,7 +163,29 @@ export interface MotivationalQuotesConfig {
   notificationTime?: { hour: number; minute: number };
 }
 
-export type ToolConfig = MementoMoriConfig | GoalsConfig | AffirmationsConfig | BreathingConfig | FocusTimerConfig | DeadlineTrackerConfig | HabitTrackerConfig | RoutineConfig | TallyCounterConfig | RoutinesConfig | MotivationalQuotesConfig;
+export type EventRecurrence =
+  | { type: 'none' }
+  | { type: 'annually' }
+  | { type: 'monthly' }                 // same day every month
+  | { type: 'every-x-months'; months: number }
+  | { type: 'every-x-days'; days: number };
+
+export interface Event {
+  id: string;
+  title: string;
+  date: string; // ISO date string
+  icon: string; // Ionicons name
+  color?: string;
+  recurrence: EventRecurrence;
+  createdAt: string;
+}
+
+export interface EventsConfig {
+  toolId: 'events';
+  events: Event[];
+}
+
+export type ToolConfig = MementoMoriConfig | GoalsConfig | AffirmationsConfig | BreathingConfig | FocusTimerConfig | DeadlineTrackerConfig | HabitTrackerConfig | RoutineConfig | TallyCounterConfig | RoutinesConfig | MotivationalQuotesConfig | EventsConfig;
 
 export interface HomeToolEntry {
   toolId: ToolId;

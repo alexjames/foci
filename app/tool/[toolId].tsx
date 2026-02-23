@@ -68,6 +68,9 @@ import { RoutineList } from '@/src/components/routine/RoutineList';
 // Motivational Quotes import
 import { QuotesView } from '@/src/components/motivational-quotes/QuotesView';
 
+// Events import
+import { EventsList, SortMode as EventSortMode } from '@/src/components/events/EventsList';
+
 function MementoView() {
   const { config, setConfig } = useToolConfig<MementoMoriConfig>('memento-mori');
   const [activeView, setActiveView] = useState<VisualizationType>('hourglass');
@@ -332,8 +335,19 @@ function MotivationalQuotesView() {
   return <QuotesView />;
 }
 
+function EventsView({ sortMode }: { sortMode: EventSortMode }) {
+  return <EventsList sortMode={sortMode} />;
+}
+
 const SORT_MODES: SortMode[] = ['manual', 'date', 'name'];
 const SORT_ICONS: Record<SortMode, string> = {
+  manual: 'reorder-four-outline',
+  date: 'calendar-outline',
+  name: 'text-outline',
+};
+
+const EVENT_SORT_MODES: EventSortMode[] = ['manual', 'date', 'name'];
+const EVENT_SORT_ICONS: Record<EventSortMode, string> = {
   manual: 'reorder-four-outline',
   date: 'calendar-outline',
   name: 'text-outline',
@@ -346,6 +360,7 @@ export default function ToolScreen() {
   const colors = Colors[colorScheme];
   const tool = TOOL_REGISTRY.find((t) => t.id === toolId);
   const [sortMode, setSortMode] = useState<SortMode>('manual');
+  const [eventSortMode, setEventSortMode] = useState<EventSortMode>('manual');
   const [affirmationsPlaying, setAffirmationsPlaying] = useState(false);
 
   const cycleSort = () => {
@@ -355,7 +370,15 @@ export default function ToolScreen() {
     });
   };
 
+  const cycleEventSort = () => {
+    setEventSortMode((prev) => {
+      const idx = EVENT_SORT_MODES.indexOf(prev);
+      return EVENT_SORT_MODES[(idx + 1) % EVENT_SORT_MODES.length];
+    });
+  };
+
   const isDeadlineTracker = toolId === 'deadline-tracker';
+  const isEvents = toolId === 'events';
   const isAffirmations = toolId === 'affirmations';
 
   const renderTool = () => {
@@ -376,6 +399,7 @@ export default function ToolScreen() {
       case 'routines': return <RoutinesView />;
       case 'tally-counter': return <TallyCounterView />;
       case 'motivational-quotes': return <MotivationalQuotesView />;
+      case 'events': return <EventsView sortMode={eventSortMode} />;
       default: return <Text style={{ color: colors.text }}>Unknown tool</Text>;
     }
   };
@@ -402,6 +426,14 @@ export default function ToolScreen() {
           <Pressable onPress={cycleSort} hitSlop={8}>
             <Ionicons
               name={SORT_ICONS[sortMode] as any}
+              size={20}
+              color={colors.text}
+            />
+          </Pressable>
+        ) : isEvents ? (
+          <Pressable onPress={cycleEventSort} hitSlop={8}>
+            <Ionicons
+              name={EVENT_SORT_ICONS[eventSortMode] as any}
               size={20}
               color={colors.text}
             />
