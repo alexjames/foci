@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,6 +7,9 @@ import {
   TouchableOpacity,
   Pressable,
   TextInput,
+  Modal,
+  StatusBar,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -21,6 +24,21 @@ import DraggableFlatList, {
   ScaleDecorator,
 } from 'react-native-draggable-flatlist';
 import { Swipeable } from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedProps,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
+import Svg, { Circle } from 'react-native-svg';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+const RING_SIZE = 240;
+const STROKE_WIDTH = 6;
+const RADIUS = (RING_SIZE - STROKE_WIDTH) / 2;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -47,6 +65,23 @@ const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function formatDisplayDate(date: Date): string {
   return `${DAYS_SHORT[date.getDay()]} ${MONTHS_SHORT[date.getMonth()]} ${date.getDate()}`;
+}
+
+function formatDuration(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function formatTimerDisplay(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -151,13 +186,422 @@ function DraggableSection({
   );
 }
 
+// ─── Checklist Focus Timer ────────────────────────────────────────────────────
+
+interface ChecklistFocusTimerProps {
+  taskTitle: string;
+  onStop: (elapsedSeconds: number) => void;
+  onDismiss: () => void;
+}
+
+function ChecklistFocusTimer({ taskTitle, onStop, onDismiss }: ChecklistFocusTimerProps) {
+  const [elapsed, setElapsed] = useState(0);
+  const [running, setRunning] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const progress = useSharedValue(0);
+
+  // Spin the ring continuously while running — one full rotation per minute
+  useEffect(() => {
+    const pct = (elapsed % 60) / 60;
+    progress.value = withTiming(pct, { duration: 900, easing: Easing.linear });
+  }, [elapsed]);
+
+  const tick = useCallback(() => {
+    setElapsed((prev) => prev + 1);
+  }, []);
+
+  const handleStart = () => {
+    setRunning(true);
+    setPaused(false);
+    activateKeepAwakeAsync();
+    timerRef.current = setInterval(tick, 1000);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
+  const handlePause = () => {
+    clearInterval(timerRef.current);
+    setPaused(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleResume = () => {
+    setPaused(false);
+    timerRef.current = setInterval(tick, 1000);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleStop = () => {
+    clearInterval(timerRef.current);
+    deactivateKeepAwake();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    onStop(elapsed);
+  };
+
+  useEffect(() => {
+    return () => {
+      clearInterval(timerRef.current);
+      deactivateKeepAwake();
+    };
+  }, []);
+
+  const animatedProps = useAnimatedProps(() => ({
+    strokeDashoffset: CIRCUMFERENCE * (1 - progress.value),
+  }));
+
+  return (
+    <Modal visible animationType="fade" statusBarTranslucent>
+      <StatusBar barStyle="light-content" />
+      <View style={timerStyles.screen}>
+        <Text style={timerStyles.taskTitle} numberOfLines={2}>{taskTitle}</Text>
+
+        <View style={timerStyles.ringContainer}>
+          <Svg width={RING_SIZE} height={RING_SIZE}>
+            <Circle
+              cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RADIUS}
+              stroke="#222" strokeWidth={STROKE_WIDTH} fill="none"
+            />
+            <AnimatedCircle
+              cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RADIUS}
+              stroke="#0A84FF" strokeWidth={STROKE_WIDTH} fill="none"
+              strokeDasharray={CIRCUMFERENCE}
+              animatedProps={animatedProps}
+              strokeLinecap="round"
+              rotation="-90"
+              origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
+            />
+          </Svg>
+          <View style={timerStyles.timeOverlay}>
+            <Text style={timerStyles.elapsed}>{formatTimerDisplay(elapsed)}</Text>
+            <Text style={timerStyles.elapsedLabel}>elapsed</Text>
+          </View>
+        </View>
+
+        <View style={timerStyles.controls}>
+          {!running && !paused ? (
+            <>
+              <Pressable onPress={onDismiss} style={timerStyles.secondaryBtn}>
+                <Ionicons name="close" size={22} color="#999" />
+              </Pressable>
+              <Pressable onPress={handleStart} style={timerStyles.mainBtn}>
+                <Ionicons name="play" size={30} color="#fff" />
+              </Pressable>
+              <View style={{ width: 52 }} />
+            </>
+          ) : (
+            <>
+              <Pressable onPress={handleStop} style={timerStyles.secondaryBtn}>
+                <Ionicons name="stop" size={22} color="#999" />
+              </Pressable>
+              <Pressable
+                onPress={paused ? handleResume : handlePause}
+                style={timerStyles.mainBtn}
+              >
+                <Ionicons name={paused ? 'play' : 'pause'} size={30} color="#fff" />
+              </Pressable>
+              <View style={{ width: 52 }} />
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const timerStyles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Layout.spacing.xl,
+  },
+  taskTitle: {
+    fontSize: Layout.fontSize.heading,
+    fontWeight: '600',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 48,
+  },
+  ringContainer: {
+    width: RING_SIZE,
+    height: RING_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeOverlay: {
+    position: 'absolute',
+    alignItems: 'center',
+  },
+  elapsed: {
+    fontSize: 52,
+    fontWeight: '200',
+    color: '#fff',
+    fontVariant: ['tabular-nums'],
+  },
+  elapsedLabel: {
+    fontSize: Layout.fontSize.caption,
+    color: '#666',
+    marginTop: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  controls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 60,
+    gap: Layout.spacing.xl,
+  },
+  mainBtn: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#333',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
+
+// ─── Task Detail Card Modal ───────────────────────────────────────────────────
+
+interface DetailEntry {
+  item: ChecklistItem;
+  date: Date;
+}
+
+interface TaskDetailModalProps {
+  entries: DetailEntry[];
+  initialIndex: number;
+  onClose: () => void;
+  onToggle: (item: ChecklistItem, date: Date) => void;
+  onFocusComplete: (item: ChecklistItem, date: Date, elapsedSeconds: number) => void;
+  isCompleted: (itemId: string, date: Date) => boolean;
+}
+
+function TaskDetailModal({
+  entries,
+  initialIndex,
+  onClose,
+  onToggle,
+  onFocusComplete,
+  isCompleted,
+}: TaskDetailModalProps) {
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+  const [index, setIndex] = useState(initialIndex);
+  const [focusItem, setFocusItem] = useState<DetailEntry | null>(null);
+
+  const current = entries[index];
+  if (!current) return null;
+
+  const done = isCompleted(current.item.id, current.date);
+
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      {focusItem && (
+        <ChecklistFocusTimer
+          taskTitle={focusItem.item.title}
+          onDismiss={() => setFocusItem(null)}
+          onStop={(elapsed) => {
+            setFocusItem(null);
+            Alert.alert(
+              'Session complete',
+              `You spent ${formatDuration(elapsed)} on this task. Mark it as complete?`,
+              [
+                { text: 'Not yet', style: 'cancel' },
+                {
+                  text: 'Mark complete',
+                  onPress: () => {
+                    onFocusComplete(focusItem.item, focusItem.date, elapsed);
+                  },
+                },
+              ]
+            );
+          }}
+        />
+      )}
+
+      <View style={detailStyles.sheet}>
+        {/* Header */}
+        <View style={detailStyles.header}>
+          <Pressable onPress={onClose} hitSlop={8} style={detailStyles.closeBtn}>
+            <Ionicons name="close" size={20} color={colors.secondaryText} />
+          </Pressable>
+          <Text style={[detailStyles.headerCount, { color: colors.secondaryText }]}>
+            {index + 1} / {entries.length}
+          </Text>
+        </View>
+
+        {/* Card */}
+        <View style={[detailStyles.card, { backgroundColor: colors.cardBackground }]}>
+          <Text style={[detailStyles.cardTitle, { color: colors.text }]}>
+            {current.item.title}
+          </Text>
+          <Text style={[detailStyles.cardDate, { color: colors.secondaryText }]}>
+            {formatDisplayDate(current.date)}
+          </Text>
+
+          {done && (
+            <View style={detailStyles.completedBadge}>
+              <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+              <Text style={detailStyles.completedBadgeText}>Completed</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Actions */}
+        <View style={detailStyles.actions}>
+          <Pressable
+            style={[detailStyles.focusBtn, { backgroundColor: colors.tint }]}
+            onPress={() => setFocusItem(current)}
+          >
+            <Ionicons name="timer-outline" size={20} color="#fff" />
+            <Text style={detailStyles.focusBtnText}>Start Focus</Text>
+          </Pressable>
+
+          <Pressable
+            style={[detailStyles.checkBtn, { borderColor: done ? colors.tint : colors.cardBorder, backgroundColor: done ? colors.tint : 'transparent' }]}
+            onPress={() => onToggle(current.item, current.date)}
+          >
+            <Ionicons name={done ? 'checkmark' : 'square-outline'} size={18} color={done ? '#fff' : colors.secondaryText} />
+            <Text style={[detailStyles.checkBtnText, { color: done ? '#fff' : colors.secondaryText }]}>
+              {done ? 'Completed' : 'Mark complete'}
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Pagination */}
+        <View style={detailStyles.pagination}>
+          <Pressable
+            onPress={() => setIndex((i) => Math.max(0, i - 1))}
+            disabled={index === 0}
+            style={[detailStyles.pageBtn, { opacity: index === 0 ? 0.3 : 1 }]}
+          >
+            <Ionicons name="chevron-up" size={24} color={colors.text} />
+          </Pressable>
+          <Pressable
+            onPress={() => setIndex((i) => Math.min(entries.length - 1, i + 1))}
+            disabled={index === entries.length - 1}
+            style={[detailStyles.pageBtn, { opacity: index === entries.length - 1 ? 0.3 : 1 }]}
+          >
+            <Ionicons name="chevron-down" size={24} color={colors.text} />
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const detailStyles = StyleSheet.create({
+  sheet: {
+    flex: 1,
+    paddingTop: Layout.spacing.md,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Layout.spacing.lg,
+    paddingBottom: Layout.spacing.md,
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCount: {
+    fontSize: Layout.fontSize.caption,
+    fontWeight: '500',
+  },
+  card: {
+    marginHorizontal: Layout.spacing.lg,
+    borderRadius: Layout.borderRadius.lg,
+    padding: Layout.spacing.xl,
+    minHeight: 160,
+    justifyContent: 'center',
+  },
+  cardTitle: {
+    fontSize: 28,
+    fontWeight: '600',
+    marginBottom: Layout.spacing.sm,
+  },
+  cardDate: {
+    fontSize: Layout.fontSize.body,
+    fontWeight: '500',
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: Layout.spacing.md,
+  },
+  completedBadgeText: {
+    fontSize: Layout.fontSize.caption,
+    color: '#34C759',
+    fontWeight: '600',
+  },
+  actions: {
+    paddingHorizontal: Layout.spacing.lg,
+    paddingTop: Layout.spacing.lg,
+    gap: Layout.spacing.md,
+  },
+  focusBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Layout.spacing.sm,
+    padding: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+  },
+  focusBtnText: {
+    color: '#fff',
+    fontSize: Layout.fontSize.body,
+    fontWeight: '600',
+  },
+  checkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Layout.spacing.sm,
+    padding: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+    borderWidth: 1.5,
+  },
+  checkBtnText: {
+    fontSize: Layout.fontSize.body,
+    fontWeight: '600',
+  },
+  pagination: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Layout.spacing.xl,
+    paddingTop: Layout.spacing.xl,
+  },
+  pageBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
+
 // ─── Today Tab ──────────────────────────────────────────────────────────────
 
 function TodayTab() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
-  const { getItemsForDate, isCompleted, toggleCompletion, addItem, deleteItem, items } = useChecklist();
+  const { getItemsForDate, isCompleted, toggleCompletion, updateCompletion, addItem, deleteItem, items } = useChecklist();
   const today = useMemo(() => startOfDay(new Date()), []);
   const tomorrow = useMemo(() => addDays(today, 1), [today]);
 
@@ -172,14 +616,22 @@ function TodayTab() {
     [todayItems, isCompleted, today]
   );
 
-  // Tomorrow's pending items
+  // Tomorrow's items split into pending / completed
+  const tomorrowAllEntries = useMemo(
+    () => getItemsForDate(tomorrow).map((item) => ({ item, date: tomorrow })),
+    [tomorrow, getItemsForDate, items]
+  );
   const tomorrowPending = useMemo(
-    () => getItemsForDate(tomorrow).filter((item) => !isCompleted(item.id, tomorrow)),
-    [tomorrow, getItemsForDate, items, isCompleted]
+    () => tomorrowAllEntries.filter(({ item }) => !isCompleted(item.id, tomorrow)).map(({ item }) => item),
+    [tomorrowAllEntries, isCompleted, tomorrow]
+  );
+  const tomorrowCompleted = useMemo(
+    () => tomorrowAllEntries.filter(({ item }) => isCompleted(item.id, tomorrow)),
+    [tomorrowAllEntries, isCompleted, tomorrow]
   );
 
-  // This week: days 2–6 from today, deduplicated by item id
-  const weekSourceEntries = useMemo<{ date: Date; item: ChecklistItem }[]>(() => {
+  // This week: days 2–6 from today, deduplicated by item id, split into pending / completed
+  const weekAllEntries = useMemo<{ date: Date; item: ChecklistItem }[]>(() => {
     const seen = new Set<string>();
     const result: { date: Date; item: ChecklistItem }[] = [];
     for (let i = 2; i <= 6; i++) {
@@ -192,6 +644,14 @@ function TodayTab() {
     }
     return result;
   }, [today, getItemsForDate, items]);
+  const weekSourceEntries = useMemo(
+    () => weekAllEntries.filter(({ item, date }) => !isCompleted(item.id, date)),
+    [weekAllEntries, isCompleted]
+  );
+  const weekCompleted = useMemo(
+    () => weekAllEntries.filter(({ item, date }) => isCompleted(item.id, date)),
+    [weekAllEntries, isCompleted]
+  );
 
   // Optimistic completion: item IDs checked off but not yet reflected in context state
   const [pendingComplete, setPendingComplete] = useState<Set<string>>(new Set());
@@ -276,6 +736,7 @@ function TodayTab() {
         }
         toggleCompletion(item.id, date);
       } else {
+        // Non-today items: just toggle, no animation
         toggleCompletion(item.id, date);
       }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -300,15 +761,40 @@ function TodayTab() {
   const [tomorrowOpen, setTomorrowOpen] = useState(true);
   const [weekOpen, setWeekOpen] = useState(false);
 
+  // All pending entries across all sections (for detail card navigation)
+  const allPendingEntries = useMemo<DetailEntry[]>(() => [
+    ...todayPendingFiltered.map((item) => ({ item, date: today })),
+    ...tomorrowPending.map((item) => ({ item, date: tomorrow })),
+    ...weekSourceEntries.map(({ item, date }) => ({ item, date })),
+  ], [todayPendingFiltered, tomorrowPending, weekSourceEntries, today, tomorrow]);
+
+  const [detailIndex, setDetailIndex] = useState<number | null>(null);
+
+  const handleFocusComplete = useCallback(
+    (item: ChecklistItem, date: Date, elapsedSeconds: number) => {
+      // Mark the task complete
+      toggleCompletion(item.id, date);
+      if (date === today) {
+        setPendingComplete((prev) => new Set(prev).add(item.id));
+      }
+      // Store time as a note on the completion record
+      updateCompletion({ itemId: item.id, date: formatDate(date), notes: `Focus session: ${formatDuration(elapsedSeconds)}` });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    [toggleCompletion, updateCompletion, today]
+  );
+
   // Refs for stable render callback
   const handleToggleRef = useRef(handleToggle);
   const colorsRef = useRef(colors);
   const animatingIdsRef = useRef(animatingIds);
   const deleteItemRef = useRef(deleteItem);
+  const allPendingEntriesRef = useRef(allPendingEntries);
   handleToggleRef.current = handleToggle;
   colorsRef.current = colors;
   animatingIdsRef.current = animatingIds;
   deleteItemRef.current = deleteItem;
+  allPendingEntriesRef.current = allPendingEntries;
 
   const handleSectionDragEnd = useCallback(
     (section: SectionId, newOrder: DragItem[]) => {
@@ -353,15 +839,23 @@ function TodayTab() {
               <Pressable
                 onPress={() => handleToggleRef.current(item, date)}
                 hitSlop={8}
+                style={[
+                  styles.circleCheckbox,
+                  completing
+                    ? { backgroundColor: colors.tint, borderColor: colors.tint }
+                    : { backgroundColor: 'transparent', borderColor: colors.secondaryText },
+                ]}
               >
-                <Ionicons
-                  name={completing ? 'checkbox' : 'square-outline'}
-                  size={24}
-                  color={completing ? colors.tint : colors.secondaryText}
-                />
+                {completing && (
+                  <Ionicons name="checkmark" size={14} color="#fff" />
+                )}
               </Pressable>
               <Pressable
                 style={styles.itemRowContent}
+                onPress={() => {
+                  const idx = allPendingEntriesRef.current.findIndex((e) => e.item.id === item.id);
+                  setDetailIndex(idx >= 0 ? idx : 0);
+                }}
                 onLongPress={() => {
                   isDragging.current = true;
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -402,11 +896,31 @@ function TodayTab() {
     []
   );
 
-  const hasAnything = todayItems.length > 0 || tomorrowPending.length > 0 || weekSourceEntries.length > 0;
-  const showQuickAddRow = showQuickAdd || todayCompletedWithPending.length > 0;
+  const allCompleted = useMemo(
+    () => [
+      ...todayCompletedWithPending.map((item) => ({ item, date: today })),
+      ...tomorrowCompleted,
+      ...weekCompleted,
+    ],
+    [todayCompletedWithPending, tomorrowCompleted, weekCompleted, today]
+  );
+
+  const hasAnything = todayItems.length > 0 || tomorrowAllEntries.length > 0 || weekAllEntries.length > 0;
+  const showQuickAddRow = showQuickAdd || allCompleted.length > 0;
 
   return (
-    <ScrollView style={styles.tabContent} contentContainerStyle={styles.listContent}>
+    <>
+      {detailIndex !== null && allPendingEntries.length > 0 && (
+        <TaskDetailModal
+          entries={allPendingEntries}
+          initialIndex={detailIndex}
+          onClose={() => setDetailIndex(null)}
+          onToggle={handleToggle}
+          onFocusComplete={handleFocusComplete}
+          isCompleted={isCompleted}
+        />
+      )}
+      <ScrollView style={styles.tabContent} contentContainerStyle={styles.listContent}>
       {!hasAnything ? (
         <View style={styles.emptyState}>
           <Ionicons name="checkmark-done-outline" size={48} color={colors.secondaryText} />
@@ -480,16 +994,18 @@ function TodayTab() {
           )}
 
           {/* ── Completed ── */}
-          {todayCompletedWithPending.length > 0 && (
-            <CollapsibleSection title="Completed" count={todayCompletedWithPending.length} defaultOpen={false}>
-              {todayCompletedWithPending.map((item) => (
+          {allCompleted.length > 0 && (
+            <CollapsibleSection title="Completed" count={allCompleted.length} defaultOpen={false}>
+              {allCompleted.map(({ item, date }) => (
                 <Pressable
-                  key={item.id}
+                  key={`${item.id}-${formatDate(date)}`}
                   style={[styles.itemRow, { backgroundColor: colors.cardBackground }]}
-                  onPress={() => handleToggle(item, today)}
+                  onPress={() => handleToggle(item, date)}
                   onLongPress={() => router.push(`/edit-checklist/${item.id}` as any)}
                 >
-                  <Ionicons name="checkbox" size={24} color={colors.tint} />
+                  <View style={[styles.circleCheckbox, { backgroundColor: colors.tint, borderColor: colors.tint }]}>
+                    <Ionicons name="checkmark" size={14} color="#fff" />
+                  </View>
                   <Text
                     style={[
                       styles.itemTitle,
@@ -505,6 +1021,7 @@ function TodayTab() {
         </>
       )}
     </ScrollView>
+    </>
   );
 }
 
@@ -769,6 +1286,14 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.caption,
     fontWeight: '600',
     marginTop: 2,
+  },
+  circleCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   itemRowContent: {
     flex: 1,

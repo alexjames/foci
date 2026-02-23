@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { ChecklistItem, RecurrenceType } from '../types';
+import { ChecklistCompletion, ChecklistItem, RecurrenceType } from '../types';
 
 export function isDueOnDate(item: ChecklistItem, date: Date): boolean {
   const day = date.getDay(); // 0=Sun, 6=Sat
@@ -97,6 +97,13 @@ export function useChecklist() {
     [state.checklistCompletions]
   );
 
+  const updateCompletion = useCallback(
+    (completion: ChecklistCompletion) => {
+      dispatch({ type: 'UPDATE_CHECKLIST_COMPLETION', payload: completion });
+    },
+    [dispatch]
+  );
+
   return {
     items: state.checklistItems,
     completions: state.checklistCompletions,
@@ -104,6 +111,7 @@ export function useChecklist() {
     updateItem,
     deleteItem,
     toggleCompletion,
+    updateCompletion,
     getItemsForDate,
     isCompleted,
   };

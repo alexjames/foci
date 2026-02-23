@@ -209,6 +209,7 @@ export interface ChecklistItem {
 export interface ChecklistCompletion {
   itemId: string;
   date: string; // YYYY-MM-DD
+  notes?: string; // e.g. "Focus session: 12:34"
 }
 
 // === GOALS ===
@@ -274,7 +275,8 @@ export type AppAction =
   | { type: 'UPDATE_CHECKLIST_ITEM'; payload: ChecklistItem }
   | { type: 'DELETE_CHECKLIST_ITEM'; payload: string }
   | { type: 'SET_CHECKLIST_COMPLETIONS'; payload: ChecklistCompletion[] }
-  | { type: 'TOGGLE_CHECKLIST_COMPLETION'; payload: { itemId: string; date: string } };
+  | { type: 'TOGGLE_CHECKLIST_COMPLETION'; payload: { itemId: string; date: string } }
+  | { type: 'UPDATE_CHECKLIST_COMPLETION'; payload: ChecklistCompletion };
 
 export const STORAGE_KEYS = {
   GOALS: '@foci/goals',

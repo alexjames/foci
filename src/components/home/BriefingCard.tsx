@@ -147,7 +147,7 @@ export function BriefingCard() {
           <View style={styles.rows}>
             <BriefingRow count={pendingTodos} label="to-do items pending" toolId="checklist" />
             <BriefingRow count={upcomingDeadlines} label="deadlines upcoming" toolId="deadline-tracker" />
-            <BriefingRow count={upcomingEvents} label="events this month" toolId="events" />
+            <BriefingRow count={upcomingEvents} label="events coming up" toolId="events" />
             <BriefingRow count={routineCount} label="routines to get to" toolId="routines" />
             <BriefingRow count={habitCount} label="habits to work on" toolId="streak-tracker" />
           </View>

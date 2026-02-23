@@ -129,6 +129,21 @@ function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
 
+    case 'UPDATE_CHECKLIST_COMPLETION': {
+      const updated = action.payload;
+      const exists = state.checklistCompletions.some(
+        (c) => c.itemId === updated.itemId && c.date === updated.date
+      );
+      return {
+        ...state,
+        checklistCompletions: exists
+          ? state.checklistCompletions.map((c) =>
+              c.itemId === updated.itemId && c.date === updated.date ? updated : c
+            )
+          : [...state.checklistCompletions, updated],
+      };
+    }
+
     default:
       return state;
   }
