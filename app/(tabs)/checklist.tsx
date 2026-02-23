@@ -199,7 +199,7 @@ interface ChecklistFocusTimerProps {
 
 function ChecklistFocusTimer({ taskTitle, onStop, onDismiss }: ChecklistFocusTimerProps) {
   const [elapsed, setElapsed] = useState(0);
-  const [running, setRunning] = useState(false);
+  const [running, setRunning] = useState(true);
   const [paused, setPaused] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const progress = useSharedValue(0);
@@ -213,14 +213,6 @@ function ChecklistFocusTimer({ taskTitle, onStop, onDismiss }: ChecklistFocusTim
   const tick = useCallback(() => {
     setElapsed((prev) => prev + 1);
   }, []);
-
-  const handleStart = () => {
-    setRunning(true);
-    setPaused(false);
-    activateKeepAwakeAsync();
-    timerRef.current = setInterval(tick, 1000);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  };
 
   const handlePause = () => {
     clearInterval(timerRef.current);
@@ -242,6 +234,8 @@ function ChecklistFocusTimer({ taskTitle, onStop, onDismiss }: ChecklistFocusTim
   };
 
   useEffect(() => {
+    activateKeepAwakeAsync();
+    timerRef.current = setInterval(tick, 1000);
     return () => {
       clearInterval(timerRef.current);
       deactivateKeepAwake();
@@ -281,30 +275,16 @@ function ChecklistFocusTimer({ taskTitle, onStop, onDismiss }: ChecklistFocusTim
         </View>
 
         <View style={timerStyles.controls}>
-          {!running && !paused ? (
-            <>
-              <Pressable onPress={onDismiss} style={timerStyles.secondaryBtn}>
-                <Ionicons name="close" size={22} color="#999" />
-              </Pressable>
-              <Pressable onPress={handleStart} style={timerStyles.mainBtn}>
-                <Ionicons name="play" size={30} color="#fff" />
-              </Pressable>
-              <View style={{ width: 52 }} />
-            </>
-          ) : (
-            <>
-              <Pressable onPress={handleStop} style={timerStyles.secondaryBtn}>
-                <Ionicons name="stop" size={22} color="#999" />
-              </Pressable>
-              <Pressable
-                onPress={paused ? handleResume : handlePause}
-                style={timerStyles.mainBtn}
-              >
-                <Ionicons name={paused ? 'play' : 'pause'} size={30} color="#fff" />
-              </Pressable>
-              <View style={{ width: 52 }} />
-            </>
-          )}
+          <Pressable onPress={handleStop} style={timerStyles.secondaryBtn}>
+            <Ionicons name="stop" size={22} color="#999" />
+          </Pressable>
+          <Pressable
+            onPress={paused ? handleResume : handlePause}
+            style={timerStyles.mainBtn}
+          >
+            <Ionicons name={paused ? 'play' : 'pause'} size={30} color="#fff" />
+          </Pressable>
+          <View style={{ width: 52 }} />
         </View>
       </View>
     </Modal>
@@ -386,6 +366,8 @@ interface TaskDetailModalProps {
   onToggle: (item: ChecklistItem, date: Date) => void;
   onFocusComplete: (item: ChecklistItem, date: Date, elapsedSeconds: number) => void;
   isCompleted: (itemId: string, date: Date) => boolean;
+  onEdit: (item: ChecklistItem) => void;
+  onDelete: (item: ChecklistItem, afterDelete: () => void) => void;
 }
 
 function TaskDetailModal({
@@ -395,6 +377,8 @@ function TaskDetailModal({
   onToggle,
   onFocusComplete,
   isCompleted,
+  onEdit,
+  onDelete,
 }: TaskDetailModalProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
@@ -440,6 +424,28 @@ function TaskDetailModal({
           <Text style={[detailStyles.headerCount, { color: colors.secondaryText }]}>
             {index + 1} / {entries.length}
           </Text>
+          <View style={detailStyles.headerActions}>
+            <Pressable
+              hitSlop={8}
+              style={detailStyles.headerIconBtn}
+              onPress={() => onEdit(current.item)}
+            >
+              <Ionicons name="pencil-outline" size={20} color={colors.secondaryText} />
+            </Pressable>
+            <Pressable
+              hitSlop={8}
+              style={detailStyles.headerIconBtn}
+              onPress={() => onDelete(current.item, () => {
+                if (entries.length === 1) {
+                  onClose();
+                } else {
+                  setIndex((i) => Math.min(i, entries.length - 2));
+                }
+              })}
+            >
+              <Ionicons name="trash-outline" size={20} color={colors.destructive} />
+            </Pressable>
+          </View>
         </View>
 
         {/* Card */}
@@ -524,6 +530,18 @@ const detailStyles = StyleSheet.create({
   headerCount: {
     fontSize: Layout.fontSize.caption,
     fontWeight: '500',
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: Layout.spacing.sm,
+  },
+  headerIconBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   card: {
     marginHorizontal: Layout.spacing.lg,
@@ -658,13 +676,10 @@ function TodayTab() {
 
   // Optimistic completion: item IDs checked off but not yet reflected in context state
   const [pendingComplete, setPendingComplete] = useState<Set<string>>(new Set());
-  // Items animating (strikethrough shown for 1s before moving to Completed)
-  const [animatingIds, setAnimatingIds] = useState<Set<string>>(new Set());
-  const animTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const todayPendingFiltered = useMemo(
     () => todayPending.filter((item) => !pendingComplete.has(item.id)),
-    [todayPending, pendingComplete, animatingIds]
+    [todayPending, pendingComplete]
   );
   const todayCompletedWithPending = useMemo(
     () => [
@@ -730,35 +745,21 @@ function TodayTab() {
     (item: ChecklistItem, date: Date) => {
       if (date === today) {
         const id = item.id;
-        const isAnimating = animatingIds.has(id);
         const isPending = pendingComplete.has(id);
         const alreadyDone = isCompleted(id, today);
-        if (isAnimating) {
-          // Cancel the pending animation (un-check)
-          clearTimeout(animTimers.current[id]);
-          delete animTimers.current[id];
-          setAnimatingIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
-        } else if (isPending || alreadyDone) {
-          // Remove from optimistic pending if present (un-complete)
+        if (isPending || alreadyDone) {
           setPendingComplete((prev) => { const s = new Set(prev); s.delete(id); return s; });
         } else {
-          // Start 1-second strikethrough animation then move to Completed
-          setAnimatingIds((prev) => new Set(prev).add(id));
-          animTimers.current[id] = setTimeout(() => {
-            setAnimatingIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
-            setPendingComplete((prev) => new Set(prev).add(id));
-            delete animTimers.current[id];
-          }, 1000);
+          setPendingComplete((prev) => new Set(prev).add(id));
         }
         toggleCompletion(item.id, date);
       } else {
-        // Non-today items: just toggle, no animation
         toggleCompletion(item.id, date);
       }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setShowQuickAdd(true);
     },
-    [toggleCompletion, today, animatingIds, pendingComplete, isCompleted]
+    [toggleCompletion, today, pendingComplete, isCompleted]
   );
 
   const scrollOffsetRef = useRef(0);
@@ -766,7 +767,7 @@ function TodayTab() {
   const commitQuickAdd = useCallback(() => {
     const title = quickAddText.trim();
     if (!title) return;
-    addItem({ title, recurrence: 'daily' });
+    addItem({ title, recurrence: 'once' });
     setQuickAddText('');
     setTimeout(() => {
       const kbTop = keyboardTopRef.current;
@@ -816,12 +817,10 @@ function TodayTab() {
   // Refs for stable render callback
   const handleToggleRef = useRef(handleToggle);
   const colorsRef = useRef(colors);
-  const animatingIdsRef = useRef(animatingIds);
   const deleteItemRef = useRef(deleteItem);
   const allPendingEntriesRef = useRef(allPendingEntries);
   handleToggleRef.current = handleToggle;
   colorsRef.current = colors;
-  animatingIdsRef.current = animatingIds;
   deleteItemRef.current = deleteItem;
   allPendingEntriesRef.current = allPendingEntries;
 
@@ -839,7 +838,6 @@ function TodayTab() {
     ({ item: entry, drag, isActive }: RenderItemParams<DragItem>) => {
       const colors = colorsRef.current;
       const { item, date, section } = entry;
-      const completing = animatingIdsRef.current.has(item.id);
       return (
         <ScaleDecorator>
           <Swipeable
@@ -870,15 +868,9 @@ function TodayTab() {
                 hitSlop={8}
                 style={[
                   styles.circleCheckbox,
-                  completing
-                    ? { backgroundColor: colors.tint, borderColor: colors.tint }
-                    : { backgroundColor: 'transparent', borderColor: colors.secondaryText },
+                  { backgroundColor: 'transparent', borderColor: colors.secondaryText },
                 ]}
-              >
-                {completing && (
-                  <Ionicons name="checkmark" size={14} color="#fff" />
-                )}
-              </Pressable>
+              />
               <Pressable
                 style={styles.itemRowContent}
                 onPress={() => {
@@ -893,17 +885,12 @@ function TodayTab() {
                 delayLongPress={300}
               >
                 <Text
-                  style={[
-                    styles.itemTitle,
-                    completing
-                      ? { color: colors.secondaryText, textDecorationLine: 'line-through' }
-                      : { color: colors.text },
-                  ]}
+                  style={[styles.itemTitle, { color: colors.text }]}
                   numberOfLines={1}
                 >
                   {item.title}
                 </Text>
-                {section === 'week' && !isActive && !completing && (
+                {section === 'week' && !isActive && (
                   <Text style={[styles.weekDateLabel, { color: colors.secondaryText }]}>
                     {formatDisplayDate(date)}
                   </Text>
@@ -946,6 +933,23 @@ function TodayTab() {
           onToggle={handleToggle}
           onFocusComplete={handleFocusComplete}
           isCompleted={isCompleted}
+          onEdit={(item) => {
+            setDetailIndex(null);
+            router.push(`/edit-checklist/${item.id}` as any);
+          }}
+          onDelete={(item, afterDelete) => {
+            Alert.alert('Delete Item', `Delete "${item.title}"?`, [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => {
+                  deleteItem(item.id);
+                  afterDelete();
+                },
+              },
+            ]);
+          }}
         />
       )}
       <KeyboardAvoidingView

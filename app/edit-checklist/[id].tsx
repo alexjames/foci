@@ -79,7 +79,7 @@ export default function EditChecklistScreen() {
     }
     return new Date();
   });
-  const [showDatePicker, setShowDatePicker] = useState(Platform.OS === 'ios');
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const handleSave = () => {
     const trimmed = title.trim();
@@ -182,52 +182,52 @@ export default function EditChecklistScreen() {
           autoFocus={id === 'new'}
         />
 
+        {/* Date row — only when not repeating */}
+        {!repeats && (
+          <>
+            <Pressable
+              style={[styles.optionRow, { backgroundColor: colors.cardBackground, marginTop: Layout.spacing.lg }]}
+              onPress={() => setShowDatePicker((v) => !v)}
+            >
+              <Text style={[styles.optionLabel, { color: colors.text }]}>Date</Text>
+              <View style={styles.dateRowRight}>
+                <Text style={[styles.dateButtonText, { color: colors.secondaryText }]}>
+                  {formatDisplayDate(onceDate)}
+                </Text>
+                <Ionicons
+                  name={showDatePicker ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={colors.secondaryText}
+                />
+              </View>
+            </Pressable>
+            {showDatePicker && (
+              <DateTimePicker
+                value={onceDate}
+                mode="date"
+                display="inline"
+                onChange={(_, selectedDate) => {
+                  if (selectedDate) setOnceDate(selectedDate);
+                }}
+                themeVariant={colorScheme}
+                style={styles.iosDatePicker}
+              />
+            )}
+          </>
+        )}
+
         {/* Repeats toggle */}
-        <View style={[styles.optionRow, { backgroundColor: colors.cardBackground, marginTop: Layout.spacing.lg }]}>
+        <View style={[styles.optionRow, { backgroundColor: colors.cardBackground, marginTop: Layout.spacing.sm }]}>
           <Text style={[styles.optionLabel, { color: colors.text }]}>Repeats</Text>
           <Switch
             value={repeats}
             onValueChange={(val) => {
               setRepeats(val);
-              if (val) setShowDatePicker(false);
-              else setShowDatePicker(Platform.OS === 'ios');
+              setShowDatePicker(false);
             }}
             trackColor={{ true: colors.tint }}
           />
         </View>
-
-        {/* One-time date picker (shown when not repeating) */}
-        {!repeats && (
-          <>
-            <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
-              Date
-            </Text>
-            {Platform.OS === 'android' && (
-              <Pressable
-                onPress={() => setShowDatePicker(true)}
-                style={[styles.dateButton, { backgroundColor: colors.cardBackground }]}
-              >
-                <Ionicons name="calendar-outline" size={20} color={colors.tint} />
-                <Text style={[styles.dateButtonText, { color: colors.text }]}>
-                  {formatDisplayDate(onceDate)}
-                </Text>
-              </Pressable>
-            )}
-            {showDatePicker && (
-              <DateTimePicker
-                value={onceDate}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                onChange={(_, selectedDate) => {
-                  if (Platform.OS === 'android') setShowDatePicker(false);
-                  if (selectedDate) setOnceDate(selectedDate);
-                }}
-                themeVariant={colorScheme}
-                style={Platform.OS === 'ios' ? styles.iosDatePicker : undefined}
-              />
-            )}
-          </>
-        )}
 
         {/* Recurrence options — only when repeating */}
         {repeats && (
@@ -364,6 +364,11 @@ const styles = StyleSheet.create({
     padding: Layout.spacing.md,
     borderRadius: Layout.borderRadius.md,
     gap: Layout.spacing.sm,
+  },
+  dateRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.xs,
   },
   dateButtonText: {
     fontSize: Layout.fontSize.body,
