@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Pressable,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -15,6 +16,10 @@ import { Layout } from '@/src/constants/Layout';
 import { useChecklist, isDueOnDate } from '@/src/hooks/useChecklist';
 import { ChecklistItem } from '@/src/types';
 import * as Haptics from 'expo-haptics';
+import DraggableFlatList, {
+  RenderItemParams,
+  ScaleDecorator,
+} from 'react-native-draggable-flatlist';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -23,14 +28,6 @@ function formatDate(date: Date): string {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
 }
 
 function addDays(date: Date, n: number): Date {
@@ -51,59 +48,407 @@ function formatDisplayDate(date: Date): string {
   return `${DAYS_SHORT[date.getDay()]} ${MONTHS_SHORT[date.getMonth()]} ${date.getDate()}`;
 }
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type SectionId = 'today' | 'tomorrow' | 'week';
+
+interface DragItem {
+  section: SectionId;
+  item: ChecklistItem;
+  date: Date;
+  key: string;
+}
+
+// ─── Section header ──────────────────────────────────────────────────────────
+
+function SectionHeader({
+  title,
+  count,
+  open,
+  onToggle,
+}: {
+  title: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+  return (
+    <Pressable style={styles.sectionHeader} onPress={onToggle} hitSlop={4}>
+      <Ionicons
+        name={open ? 'chevron-down' : 'chevron-forward'}
+        size={16}
+        color={colors.secondaryText}
+      />
+      <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>{title}</Text>
+      <View style={[styles.sectionBadge, { backgroundColor: colors.cardBorder }]}>
+        <Text style={[styles.sectionBadgeText, { color: colors.secondaryText }]}>{count}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+// ─── Collapsible Section (used for Completed) ────────────────────────────────
+
+function CollapsibleSection({
+  title,
+  count,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  count: number;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <View>
+      <SectionHeader title={title} count={count} open={open} onToggle={() => setOpen((o) => !o)} />
+      {open && children}
+    </View>
+  );
+}
+
+// ─── Draggable section list ───────────────────────────────────────────────────
+// Renders a section header + a DraggableFlatList of items for ONE section.
+// Headers are outside the FlatList so they don't confuse offset calculations.
+
+function DraggableSection({
+  title,
+  items,
+  open,
+  onToggle,
+  onDragEnd,
+  renderDragItem,
+}: {
+  title: string;
+  items: DragItem[];
+  open: boolean;
+  onToggle: () => void;
+  onDragEnd: (section: SectionId, newOrder: DragItem[]) => void;
+  renderDragItem: (params: RenderItemParams<DragItem>) => React.ReactElement;
+}) {
+  const section = items[0]?.section ?? 'today';
+  return (
+    <View>
+      <SectionHeader title={title} count={items.length} open={open} onToggle={onToggle} />
+      {open && (
+        <DraggableFlatList
+          data={items}
+          keyExtractor={(entry) => entry.key}
+          renderItem={renderDragItem}
+          onDragEnd={({ data }) => onDragEnd(section, data)}
+          activationDistance={8}
+          scrollEnabled={false}
+        />
+      )}
+    </View>
+  );
+}
+
 // ─── Today Tab ──────────────────────────────────────────────────────────────
 
 function TodayTab() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
-  const { getItemsForDate, isCompleted, toggleCompletion, items } = useChecklist();
+  const { getItemsForDate, isCompleted, toggleCompletion, addItem, items } = useChecklist();
   const today = useMemo(() => startOfDay(new Date()), []);
-  const dayItems = useMemo(
-    () => getItemsForDate(today),
-    [today, getItemsForDate, items]
+  const tomorrow = useMemo(() => addDays(today, 1), [today]);
+
+  // Today's items split into pending / completed
+  const todayItems = useMemo(() => getItemsForDate(today), [today, getItemsForDate, items]);
+  const todayPending = useMemo(
+    () => todayItems.filter((item) => !isCompleted(item.id, today)),
+    [todayItems, isCompleted, today]
   );
+  const todayCompleted = useMemo(
+    () => todayItems.filter((item) => isCompleted(item.id, today)),
+    [todayItems, isCompleted, today]
+  );
+
+  // Tomorrow's pending items
+  const tomorrowPending = useMemo(
+    () => getItemsForDate(tomorrow).filter((item) => !isCompleted(item.id, tomorrow)),
+    [tomorrow, getItemsForDate, items, isCompleted]
+  );
+
+  // This week: days 2–6 from today, deduplicated by item id
+  const weekSourceEntries = useMemo<{ date: Date; item: ChecklistItem }[]>(() => {
+    const seen = new Set<string>();
+    const result: { date: Date; item: ChecklistItem }[] = [];
+    for (let i = 2; i <= 6; i++) {
+      const date = addDays(today, i);
+      for (const item of getItemsForDate(date)) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        result.push({ date, item });
+      }
+    }
+    return result;
+  }, [today, getItemsForDate, items]);
+
+  // Optimistic completion: item IDs checked off but not yet reflected in context state
+  const [pendingComplete, setPendingComplete] = useState<Set<string>>(new Set());
+
+  const todayPendingFiltered = useMemo(
+    () => todayPending.filter((item) => !pendingComplete.has(item.id)),
+    [todayPending, pendingComplete]
+  );
+  const todayCompletedWithPending = useMemo(
+    () => [
+      ...todayCompleted,
+      ...todayPending.filter((item) => pendingComplete.has(item.id)),
+    ],
+    [todayCompleted, todayPending, pendingComplete]
+  );
+
+  // Once context state catches up, remove from pendingComplete
+  React.useEffect(() => {
+    setPendingComplete((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Set(prev);
+      for (const id of prev) {
+        if (isCompleted(id, today)) next.delete(id);
+      }
+      return next.size === prev.size ? prev : next;
+    });
+  }, [isCompleted, today]);
+
+  // Convert source arrays to DragItem arrays (local order state lives here)
+  const [todayDragItems, setTodayDragItems] = useState<DragItem[]>([]);
+  const [tomorrowDragItems, setTomorrowDragItems] = useState<DragItem[]>([]);
+  const [weekDragItems, setWeekDragItems] = useState<DragItem[]>([]);
+
+  // Sync drag items from source whenever source changes (skip during drag)
+  const isDragging = useRef(false);
+
+  React.useEffect(() => {
+    if (isDragging.current) return;
+    setTodayDragItems(todayPendingFiltered.map((item) => ({ section: 'today' as SectionId, item, date: today, key: `today-${item.id}` })));
+  }, [todayPendingFiltered, today]);
+
+  React.useEffect(() => {
+    if (isDragging.current) return;
+    setTomorrowDragItems(tomorrowPending.map((item) => ({ section: 'tomorrow' as SectionId, item, date: tomorrow, key: `tomorrow-${item.id}` })));
+  }, [tomorrowPending, tomorrow]);
+
+  React.useEffect(() => {
+    if (isDragging.current) return;
+    setWeekDragItems(weekSourceEntries.map(({ date, item }) => ({ section: 'week' as SectionId, item, date, key: `week-${item.id}` })));
+  }, [weekSourceEntries]);
+
+  const [quickAddText, setQuickAddText] = useState('');
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+
+  const handleToggle = useCallback(
+    (item: ChecklistItem, date: Date) => {
+      // Optimistically move today's items immediately; for other days just toggle
+      if (date === today) {
+        setPendingComplete((prev) => {
+          const next = new Set(prev);
+          if (next.has(item.id)) next.delete(item.id);
+          else next.add(item.id);
+          return next;
+        });
+      }
+      toggleCompletion(item.id, date);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setShowQuickAdd(true);
+    },
+    [toggleCompletion, today]
+  );
+
+  const commitQuickAdd = useCallback(() => {
+    const title = quickAddText.trim();
+    if (!title) return;
+    addItem({ title, recurrence: 'daily' });
+    setQuickAddText('');
+  }, [quickAddText, addItem]);
+
+  const handleSubmitEditing = useCallback(() => {
+    commitQuickAdd();
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }, [commitQuickAdd]);
+
+  const [todayOpen, setTodayOpen] = useState(true);
+  const [tomorrowOpen, setTomorrowOpen] = useState(true);
+  const [weekOpen, setWeekOpen] = useState(false);
+
+  // Refs for stable render callback
+  const handleToggleRef = useRef(handleToggle);
+  const colorsRef = useRef(colors);
+  handleToggleRef.current = handleToggle;
+  colorsRef.current = colors;
+
+  const handleSectionDragEnd = useCallback(
+    (section: SectionId, newOrder: DragItem[]) => {
+      isDragging.current = false;
+      if (section === 'today') setTodayDragItems(newOrder);
+      else if (section === 'tomorrow') setTomorrowDragItems(newOrder);
+      else setWeekDragItems(newOrder);
+    },
+    []
+  );
+
+  const renderDragItem = useCallback(
+    ({ item: entry, drag, isActive }: RenderItemParams<DragItem>) => {
+      const colors = colorsRef.current;
+      const { item, date, section } = entry;
+      return (
+        <ScaleDecorator>
+          <View
+            style={[
+              styles.itemRow,
+              { backgroundColor: colors.cardBackground },
+              isActive && styles.itemRowActive,
+            ]}
+          >
+            <Pressable
+              onPress={() => handleToggleRef.current(item, date)}
+              hitSlop={8}
+            >
+              <Ionicons name="square-outline" size={24} color={colors.secondaryText} />
+            </Pressable>
+            <Pressable
+              style={styles.itemRowContent}
+              onLongPress={() => {
+                isDragging.current = true;
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                drag();
+              }}
+              delayLongPress={300}
+            >
+              <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
+                {item.title}
+              </Text>
+              {section === 'week' && !isActive && (
+                <Text style={[styles.weekDateLabel, { color: colors.secondaryText }]}>
+                  {formatDisplayDate(date)}
+                </Text>
+              )}
+              {isActive && (
+                <Ionicons
+                  name="reorder-three-outline"
+                  size={20}
+                  color={colors.secondaryText}
+                  style={{ opacity: 0.4 }}
+                />
+              )}
+            </Pressable>
+          </View>
+        </ScaleDecorator>
+      );
+    },
+    []
+  );
+
+  const hasAnything = todayItems.length > 0 || tomorrowPending.length > 0 || weekSourceEntries.length > 0;
+  const showQuickAddRow = showQuickAdd || todayCompletedWithPending.length > 0;
 
   return (
     <ScrollView style={styles.tabContent} contentContainerStyle={styles.listContent}>
-      {dayItems.length === 0 ? (
+      {!hasAnything ? (
         <View style={styles.emptyState}>
           <Ionicons name="checkmark-done-outline" size={48} color={colors.secondaryText} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>All clear for today</Text>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>All clear</Text>
           <Text style={[styles.emptyMessage, { color: colors.secondaryText }]}>
             Tap + to add a checklist item
           </Text>
         </View>
       ) : (
-        dayItems.map((item) => {
-          const completed = isCompleted(item.id, today);
-          return (
-            <Pressable
-              key={item.id}
-              style={[styles.itemRow, { backgroundColor: colors.cardBackground }]}
-              onPress={() => {
-                toggleCompletion(item.id, today);
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
-              onLongPress={() => router.push(`/edit-checklist/${item.id}` as any)}
-            >
-              <Ionicons
-                name={completed ? 'checkbox' : 'square-outline'}
-                size={24}
-                color={completed ? colors.tint : colors.secondaryText}
-              />
-              <Text
-                style={[
-                  styles.itemTitle,
-                  { color: colors.text },
-                  completed && { textDecorationLine: 'line-through', color: colors.secondaryText },
-                ]}
+        <>
+          {/* ── Today ── */}
+          <DraggableSection
+            title="Today"
+            items={todayDragItems}
+            open={todayOpen}
+            onToggle={() => setTodayOpen((o) => !o)}
+            onDragEnd={handleSectionDragEnd}
+            renderDragItem={renderDragItem}
+          />
+
+          {/* Quick-add row */}
+          {showQuickAddRow && (
+            <View style={[styles.quickAddRow, { backgroundColor: colors.cardBackground }]}>
+              <Pressable
+                onPress={() => {
+                  setShowQuickAdd(true);
+                  setTimeout(() => inputRef.current?.focus(), 50);
+                }}
+                hitSlop={8}
               >
-                {item.title}
-              </Text>
-            </Pressable>
-          );
-        })
+                <Ionicons name="add" size={22} color={colors.tint} />
+              </Pressable>
+              <TextInput
+                ref={inputRef}
+                style={[styles.quickAddInput, { color: colors.text }]}
+                placeholder="Add item…"
+                placeholderTextColor={colors.secondaryText}
+                value={quickAddText}
+                onChangeText={setQuickAddText}
+                onSubmitEditing={handleSubmitEditing}
+                returnKeyType="done"
+                blurOnSubmit={false}
+                onFocus={() => setShowQuickAdd(true)}
+                onBlur={commitQuickAdd}
+              />
+            </View>
+          )}
+
+          {/* ── Tomorrow ── */}
+          {tomorrowDragItems.length > 0 && (
+            <DraggableSection
+              title="Tomorrow"
+              items={tomorrowDragItems}
+              open={tomorrowOpen}
+              onToggle={() => setTomorrowOpen((o) => !o)}
+              onDragEnd={handleSectionDragEnd}
+              renderDragItem={renderDragItem}
+            />
+          )}
+
+          {/* ── This Week ── */}
+          {weekDragItems.length > 0 && (
+            <DraggableSection
+              title="This Week"
+              items={weekDragItems}
+              open={weekOpen}
+              onToggle={() => setWeekOpen((o) => !o)}
+              onDragEnd={handleSectionDragEnd}
+              renderDragItem={renderDragItem}
+            />
+          )}
+
+          {/* ── Completed ── */}
+          {todayCompletedWithPending.length > 0 && (
+            <CollapsibleSection title="Completed" count={todayCompletedWithPending.length} defaultOpen={false}>
+              {todayCompletedWithPending.map((item) => (
+                <Pressable
+                  key={item.id}
+                  style={[styles.itemRow, { backgroundColor: colors.cardBackground }]}
+                  onPress={() => handleToggle(item, today)}
+                  onLongPress={() => router.push(`/edit-checklist/${item.id}` as any)}
+                >
+                  <Ionicons name="checkbox" size={24} color={colors.tint} />
+                  <Text
+                    style={[
+                      styles.itemTitle,
+                      { color: colors.secondaryText, textDecorationLine: 'line-through' },
+                    ]}
+                  >
+                    {item.title}
+                  </Text>
+                </Pressable>
+              ))}
+            </CollapsibleSection>
+          )}
+        </>
       )}
     </ScrollView>
   );
@@ -126,13 +471,12 @@ function UpcomingTab() {
     const today = startOfDay(new Date());
     const endOfYear = new Date(today.getFullYear(), 11, 31);
     const result: UpcomingEntry[] = [];
-    const seenRepeating = new Set<string>(); // track repeating items already shown
+    const seenRepeating = new Set<string>();
 
     let cursor = addDays(today, 1);
     while (cursor <= endOfYear) {
       const dueItems = getItemsForDate(cursor);
       for (const item of dueItems) {
-        // Each item shown only once — at its next upcoming occurrence
         if (seenRepeating.has(item.id)) continue;
         result.push({ date: new Date(cursor), item });
         seenRepeating.add(item.id);
@@ -156,7 +500,7 @@ function UpcomingTab() {
 
   return (
     <ScrollView style={styles.tabContent} contentContainerStyle={styles.listContent}>
-      {entries.map(({ date, item }, index) => (
+      {entries.map(({ date, item }) => (
         <Pressable
           key={`${item.id}-${formatDate(date)}`}
           style={[styles.dateRow, { backgroundColor: colors.cardBackground }]}
@@ -192,18 +536,14 @@ function OverdueTab() {
     const today = startOfDay(new Date());
     const lookbackDays = 30;
     const result: OverdueEntry[] = [];
-    // Track items already added so repeating items only show their most recent miss
     const seen = new Set<string>();
 
-    // Iterate most-recent-first so the first miss we encounter per item is the latest
     for (let i = 1; i <= lookbackDays; i++) {
       const date = addDays(today, -i);
       const dueItems = getItemsForDate(date);
       for (const item of dueItems) {
         if (seen.has(item.id)) continue;
         if (!isCompleted(item.id, date)) {
-          // Only show if the item doesn't recur today — if it does, the user
-          // can handle it in Today and it shouldn't clutter Overdue
           if (!isDueOnDate(item, today)) {
             result.push({ date, item });
             seen.add(item.id);
@@ -343,8 +683,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: Layout.spacing.md,
-    gap: Layout.spacing.sm,
-    flexGrow: 1,
     paddingBottom: 100,
   },
   itemRow: {
@@ -352,6 +690,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Layout.spacing.md,
     borderRadius: Layout.borderRadius.md,
+    gap: Layout.spacing.sm,
+    marginBottom: Layout.spacing.sm,
+  },
+  itemRowActive: {
+    opacity: 0.85,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  itemRowContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Layout.spacing.sm,
   },
   itemTitle: {
@@ -364,6 +717,7 @@ const styles = StyleSheet.create({
     padding: Layout.spacing.md,
     borderRadius: Layout.borderRadius.md,
     gap: 0,
+    marginBottom: Layout.spacing.sm,
   },
   dateLabel: {
     fontSize: Layout.fontSize.caption,
@@ -378,6 +732,49 @@ const styles = StyleSheet.create({
   dateItemTitle: {
     fontSize: Layout.fontSize.body,
     flex: 1,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Layout.spacing.sm,
+    paddingHorizontal: Layout.spacing.xs,
+    gap: Layout.spacing.xs,
+    marginTop: Layout.spacing.sm,
+    marginBottom: Layout.spacing.xs,
+  },
+  sectionTitle: {
+    fontSize: Layout.fontSize.caption,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    flex: 1,
+  },
+  sectionBadge: {
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  sectionBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  weekDateLabel: {
+    fontSize: Layout.fontSize.caption,
+    fontWeight: '500',
+  },
+  quickAddRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+    gap: Layout.spacing.sm,
+    marginBottom: Layout.spacing.sm,
+  },
+  quickAddInput: {
+    flex: 1,
+    fontSize: Layout.fontSize.body,
   },
   emptyState: {
     alignItems: 'center',
