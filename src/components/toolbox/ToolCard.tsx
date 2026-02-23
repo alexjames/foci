@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View, Text } from 'react-native';
+import { StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme } from '@/components/useColorScheme';
 import { Colors } from '@/src/constants/Colors';
@@ -8,11 +8,11 @@ import { ToolDefinition } from '@/src/types';
 
 interface ToolCardProps {
   tool: ToolDefinition;
-  isAdded: boolean;
   onPress: () => void;
+  onLongPress?: () => void;
 }
 
-export function ToolCard({ tool, isAdded, onPress }: ToolCardProps) {
+export function ToolCard({ tool, onPress, onLongPress }: ToolCardProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
 
@@ -20,13 +20,9 @@ export function ToolCard({ tool, isAdded, onPress }: ToolCardProps) {
     <TouchableOpacity
       style={[styles.card, { backgroundColor: colors.cardBackground }]}
       onPress={onPress}
+      onLongPress={onLongPress}
       activeOpacity={0.7}
     >
-      {isAdded && (
-        <View style={[styles.badge, { backgroundColor: colors.tint }]}>
-          <Ionicons name="checkmark" size={12} color="#fff" />
-        </View>
-      )}
       <Ionicons
         name={tool.icon as any}
         size={32}
@@ -49,16 +45,6 @@ const styles = StyleSheet.create({
     borderRadius: Layout.borderRadius.md,
     alignItems: 'center',
     minHeight: 140,
-    justifyContent: 'center',
-  },
-  badge: {
-    position: 'absolute',
-    top: Layout.spacing.sm,
-    right: Layout.spacing.sm,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
     justifyContent: 'center',
   },
   icon: {

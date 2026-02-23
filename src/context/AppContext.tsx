@@ -9,6 +9,7 @@ import {
   ToolConfig,
 } from '../types';
 import { migrateData } from '../storage/migration';
+import { TOOL_REGISTRY } from '../constants/tools';
 
 const initialState: AppState = {
   goals: [],
@@ -172,13 +173,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Run migration for old data format
         const migrated = await migrateData(goals, rawSettings, toolConfigs, homeTools);
 
+        // Ensure every tool in the registry has an entry in homeTools (preserves saved order,
+        // appends any new tools that were added in a later version)
+        const seededHomeTools = [...migrated.homeTools];
+        for (const tool of TOOL_REGISTRY) {
+          if (!seededHomeTools.some((t) => t.toolId === tool.id)) {
+            seededHomeTools.push({ toolId: tool.id, order: seededHomeTools.length });
+          }
+        }
+
         dispatch({
           type: 'LOAD_STATE',
           payload: {
             goals,
             settings,
             toolConfigs: migrated.toolConfigs,
-            homeTools: migrated.homeTools,
+            homeTools: seededHomeTools,
             checklistItems: checklistItemsJson
               ? JSON.parse(checklistItemsJson)
               : [],

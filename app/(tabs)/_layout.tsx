@@ -39,10 +39,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="toolbox"
         options={{
-          title: 'Toolbox',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="briefcase-outline" size={size} color={color} />
-          ),
+          href: null,
         }}
       />
       <Tabs.Screen

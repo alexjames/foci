@@ -34,9 +34,11 @@ export default function EditDeadlineScreen() {
   );
 
   const [title, setTitle] = useState(existingDeadline?.title ?? '');
-  const [date, setDate] = useState<Date>(
-    existingDeadline ? new Date(existingDeadline.date) : new Date()
-  );
+  const [date, setDate] = useState<Date>(() => {
+    if (!existingDeadline) return new Date();
+    const parsed = new Date(existingDeadline.date);
+    return isNaN(parsed.getTime()) ? new Date() : parsed;
+  });
   const [selectedColor, setSelectedColor] = useState<string | undefined>(
     existingDeadline?.color
   );
@@ -179,7 +181,7 @@ export default function EditDeadlineScreen() {
             display={Platform.OS === 'ios' ? 'inline' : 'default'}
             onChange={(_, selectedDate) => {
               if (Platform.OS === 'android') setShowDatePicker(false);
-              if (selectedDate) setDate(selectedDate);
+              if (selectedDate && !isNaN(selectedDate.getTime())) setDate(selectedDate);
             }}
             themeVariant={colorScheme}
             style={Platform.OS === 'ios' ? styles.iosDatePicker : undefined}

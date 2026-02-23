@@ -5,6 +5,7 @@ import {
   Text,
   Pressable,
   Alert,
+  ScrollView,
   useColorScheme,
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';

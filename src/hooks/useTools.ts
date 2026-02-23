@@ -1,11 +1,19 @@
 import { useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { ToolId, HomeToolEntry } from '../types';
+import { ToolId, HomeToolEntry, ToolDefinition } from '../types';
+import { TOOL_REGISTRY } from '../constants/tools';
 
 export function useTools() {
   const { state, dispatch } = useAppContext();
 
   const homeTools = [...state.homeTools].sort((a, b) => a.order - b.order);
+
+  // All registry tools in persisted order (falls back to registry order for unseeded tools)
+  const orderedTools: ToolDefinition[] = homeTools.length > 0
+    ? homeTools
+        .map((entry) => TOOL_REGISTRY.find((t) => t.id === entry.toolId))
+        .filter((t): t is ToolDefinition => t !== undefined)
+    : TOOL_REGISTRY;
 
   const isToolOnHome = useCallback(
     (toolId: ToolId) => state.homeTools.some((t) => t.toolId === toolId),
@@ -42,6 +50,7 @@ export function useTools() {
 
   return {
     homeTools,
+    orderedTools,
     isToolOnHome,
     addToolToHome,
     removeToolFromHome,
