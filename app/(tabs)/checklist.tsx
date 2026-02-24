@@ -1877,7 +1877,6 @@ function OverdueTab() {
 
     const addIfOverdue = (item: ChecklistItem, date: Date, bucket: DragItem[], section: SectionId, key: string) => {
       if (seen.has(item.id)) return;
-      if (isCompleted(item.id, date)) return;
       if (isDueOnDate(item, today)) return; // already showing in Today
       seen.add(item.id);
       bucket.push({ section, item, date, key: `${key}-${item.id}` });
@@ -1905,7 +1904,7 @@ function OverdueTab() {
     }
 
     return { yesterdayEntries: yesterdayItems, weekEntries: weekItems, earlierEntries: earlierItems };
-  }, [today, getItemsForDate, isCompleted, items]);
+  }, [today, getItemsForDate, items]);
 
   const [yesterdayDragItems, setYesterdayDragItems] = useState<DragItem[]>([]);
   const [weekDragItems, setWeekDragItems] = useState<DragItem[]>([]);
