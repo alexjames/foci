@@ -73,6 +73,70 @@ export default function EditChecklistScreen() {
 
   const isEditingTemplate = existingItem?.kind === 'template' || isTemplate;
 
+  // If this item is an instance of a recurring rule, find the parent rule
+  const parentRule = useMemo(
+    () => (existingItem?.recurringRuleId ? items.find((i) => i.id === existingItem.recurringRuleId) : null),
+    [existingItem, items]
+  );
+
+  // Compute the allowed reschedule date range for recurring instances
+  const recurringDateRange = useMemo<{ min: Date; max: Date } | null>(() => {
+    if (!parentRule || !existingItem) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    function parseLocalDate(s: string): Date {
+      const [y, m, d] = s.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+    function addDaysLocal(d: Date, n: number): Date {
+      const r = new Date(d);
+      r.setDate(r.getDate() + n);
+      return r;
+    }
+
+    // Use periodDate (canonical period anchor) for range computation; fall back to startDate
+    const periodDateStr = existingItem.periodDate ?? existingItem.startDate;
+    const periodDate = parseLocalDate(periodDateStr);
+    // Minimum allowed = today
+    const minDate = new Date(today);
+
+    switch (parentRule.recurrence) {
+      case 'daily':
+        // Daily tasks cannot be rescheduled
+        return null;
+      case 'every-n-days': {
+        const n = parentRule.everyNDays ?? 1;
+        const start = parseLocalDate(parentRule.startDate);
+        const diffMs = periodDate.getTime() - start.getTime();
+        const diffDays = Math.floor(diffMs / 86400000);
+        const periodIndex = Math.max(0, Math.floor(diffDays / n));
+        // max = start of next period - 1 day
+        const nextPeriodStart = addDaysLocal(start, (periodIndex + 1) * n);
+        const maxDate = addDaysLocal(nextPeriodStart, -1);
+        // If there's no room to reschedule (min >= max), treat as fixed
+        if (minDate >= maxDate) return null;
+        return { min: minDate, max: maxDate };
+      }
+      case 'weekdays': {
+        // Period = one weekday; max = same day (no future weekday within "period")
+        // Allow moving to any weekday on/after today before the next weekday occurrence
+        // Actually for weekdays/weekends/specific-days: each occurrence is a "period" of 1 day
+        // But the rule says "current period" — for weekdays each day is a period.
+        // So the instance can only stay on the same day. Disallow reschedule.
+        return null;
+      }
+      case 'weekends': {
+        return null; // same reasoning — each occurrence is its own day
+      }
+      case 'specific-days': {
+        return null; // same reasoning
+      }
+      default:
+        return null;
+    }
+  }, [parentRule, existingItem]);
+
   // Determine if existing item repeats (anything other than 'once')
   const existingRepeats = existingItem ? existingItem.recurrence !== 'once' : false;
 
@@ -93,7 +157,8 @@ export default function EditChecklistScreen() {
   // For one-time items: the date to do it
   const [onceDate, setOnceDate] = useState<Date>(() => {
     if (existingItem && existingItem.recurrence === 'once') {
-      return new Date(existingItem.startDate);
+      const [y, m, d] = existingItem.startDate.split('-').map(Number);
+      return new Date(y, m - 1, d);
     }
     return new Date();
   });
@@ -207,8 +272,20 @@ export default function EditChecklistScreen() {
         });
       }
     } else {
-      // One-time task
+      // One-time task (or recurring instance)
       if (existingItem) {
+        // Validate date range for recurring instances
+        if (existingItem.recurringRuleId && recurringDateRange) {
+          const chosen = new Date(onceDate.getFullYear(), onceDate.getMonth(), onceDate.getDate());
+          if (chosen < recurringDateRange.min || chosen > recurringDateRange.max) {
+            const maxStr = recurringDateRange.max.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            Alert.alert(
+              'Date Out of Range',
+              `This task can only be moved up to ${maxStr} (the day before its next recurrence).`
+            );
+            return;
+          }
+        }
         updateItem({
           ...existingItem,
           title: trimmed,
@@ -231,6 +308,13 @@ export default function EditChecklistScreen() {
 
   const handleDelete = () => {
     if (!existingItem) return;
+    if (existingItem.recurringRuleId) {
+      Alert.alert(
+        'Cannot Delete',
+        'Instances of recurring tasks cannot be deleted. Please delete the corresponding recurring task in the Recurring menu.'
+      );
+      return;
+    }
     Alert.alert('Delete Item', `Delete "${existingItem.title}"?`, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -340,39 +424,67 @@ export default function EditChecklistScreen() {
             {/* Date row — only when not repeating */}
             {!repeats && (
               <>
-                <Pressable
-                  style={[styles.optionRow, { backgroundColor: colors.cardBackground, marginTop: Layout.spacing.lg }]}
-                  onPress={() => setShowDatePicker((v) => !v)}
-                >
-                  <Text style={[styles.optionLabel, { color: colors.text }]}>Date</Text>
-                  <View style={styles.dateRowRight}>
-                    <Text style={[styles.dateButtonText, { color: colors.secondaryText }]}>
-                      {formatDisplayDate(onceDate)}
-                    </Text>
-                    <Ionicons
-                      name={showDatePicker ? 'chevron-up' : 'chevron-down'}
-                      size={16}
-                      color={colors.secondaryText}
-                    />
+                {/* Recurring instance with no reschedule allowed */}
+                {existingItem?.recurringRuleId && !recurringDateRange ? (
+                  <View style={[styles.optionRow, { backgroundColor: colors.cardBackground, marginTop: Layout.spacing.lg }]}>
+                    <Text style={[styles.optionLabel, { color: colors.text }]}>Date</Text>
+                    <View style={styles.dateRowRight}>
+                      <Text style={[styles.dateButtonText, { color: colors.secondaryText }]}>
+                        {formatDisplayDate(onceDate)}
+                      </Text>
+                      <Text style={[styles.dateButtonText, { color: colors.secondaryText, fontSize: 11, marginLeft: 4 }]}>
+                        (fixed)
+                      </Text>
+                    </View>
                   </View>
-                </Pressable>
-                {showDatePicker && (
-                  <DateTimePicker
-                    value={onceDate}
-                    mode="date"
-                    display="inline"
-                    onChange={(_, selectedDate) => {
-                      if (selectedDate) setOnceDate(selectedDate);
-                    }}
-                    themeVariant={colorScheme}
-                    style={styles.iosDatePicker}
-                  />
+                ) : (
+                  <>
+                    <Pressable
+                      style={[styles.optionRow, { backgroundColor: colors.cardBackground, marginTop: Layout.spacing.lg }]}
+                      onPress={() => setShowDatePicker((v) => !v)}
+                    >
+                      <Text style={[styles.optionLabel, { color: colors.text }]}>Date</Text>
+                      <View style={styles.dateRowRight}>
+                        <Text style={[styles.dateButtonText, { color: colors.secondaryText }]}>
+                          {formatDisplayDate(onceDate)}
+                        </Text>
+                        <Ionicons
+                          name={showDatePicker ? 'chevron-up' : 'chevron-down'}
+                          size={16}
+                          color={colors.secondaryText}
+                        />
+                      </View>
+                    </Pressable>
+                    {showDatePicker && (
+                      <DateTimePicker
+                        value={
+                          recurringDateRange
+                            ? new Date(
+                                Math.min(
+                                  Math.max(onceDate.getTime(), recurringDateRange.min.getTime()),
+                                  recurringDateRange.max.getTime()
+                                )
+                              )
+                            : onceDate
+                        }
+                        mode="date"
+                        display="inline"
+                        minimumDate={recurringDateRange?.min}
+                        maximumDate={recurringDateRange?.max}
+                        onChange={(_, selectedDate) => {
+                          if (selectedDate) setOnceDate(selectedDate);
+                        }}
+                        themeVariant={colorScheme}
+                        style={styles.iosDatePicker}
+                      />
+                    )}
+                  </>
                 )}
               </>
             )}
 
-            {/* Repeats toggle — hide when creating from template */}
-            {!templateId && (
+            {/* Repeats toggle — hide when creating from template or editing recurring instance */}
+            {!templateId && !existingItem?.recurringRuleId && (
               <View style={[styles.optionRow, { backgroundColor: colors.cardBackground, marginTop: Layout.spacing.sm }]}>
                 <Text style={[styles.optionLabel, { color: colors.text }]}>Repeats</Text>
                 <Switch
@@ -386,8 +498,8 @@ export default function EditChecklistScreen() {
               </View>
             )}
 
-            {/* Recurrence options — only when repeating */}
-            {repeats && !templateId && (
+            {/* Recurrence options — only when repeating and not a recurring instance */}
+            {repeats && !templateId && !existingItem?.recurringRuleId && (
               <>
                 <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
                   Frequency

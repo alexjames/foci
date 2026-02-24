@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useColorScheme } from '@/components/useColorScheme';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
@@ -27,7 +27,7 @@ import DraggableFlatList, {
   RenderItemParams,
   ScaleDecorator,
 } from 'react-native-draggable-flatlist';
-import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import Swipeable, { SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated, {
   useSharedValue,
   useAnimatedProps,
@@ -534,31 +534,33 @@ function TaskDetailModal({
             </View>
           )}
 
-          <View style={detailStyles.rescheduleRow}>
-            <Pressable
-              style={[detailStyles.rescheduleBtn, { borderColor: colors.cardBorder }]}
-              onPress={() => {
-                const newDate = isToday ? addDays(today, 1) : today;
-                onReschedule(current.item, newDate);
-                onClose();
-              }}
-            >
-              <Text style={[detailStyles.rescheduleBtnText, { color: colors.text }]}>
-                {isToday ? 'Move to tomorrow' : 'Do this today'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[detailStyles.rescheduleBtn, { borderColor: colors.cardBorder }]}
-              onPress={() => {
-                onReschedule(current.item, addDays(today, 3));
-                onClose();
-              }}
-            >
-              <Text style={[detailStyles.rescheduleBtnText, { color: colors.text }]}>
-                Move to later this week
-              </Text>
-            </Pressable>
-          </View>
+          {!current.item.recurringRuleId && (
+            <View style={detailStyles.rescheduleRow}>
+              <Pressable
+                style={[detailStyles.rescheduleBtn, { borderColor: colors.cardBorder }]}
+                onPress={() => {
+                  const newDate = isToday ? addDays(today, 1) : today;
+                  onReschedule(current.item, newDate);
+                  onClose();
+                }}
+              >
+                <Text style={[detailStyles.rescheduleBtnText, { color: colors.text }]}>
+                  {isToday ? 'Move to tomorrow' : 'Do this today'}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[detailStyles.rescheduleBtn, { borderColor: colors.cardBorder }]}
+                onPress={() => {
+                  onReschedule(current.item, addDays(today, 3));
+                  onClose();
+                }}
+              >
+                <Text style={[detailStyles.rescheduleBtnText, { color: colors.text }]}>
+                  Move to later this week
+                </Text>
+              </Pressable>
+            </View>
+          )}
 
           {/* Subtasks */}
           {subtasks.length > 0 && (
@@ -897,8 +899,16 @@ function TodayTab() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
-  const { getItemsForDate, isCompleted, toggleCompletion, updateCompletion, addItem, updateItem, moveToTrash, items } = useChecklist();
+  const { getItemsForDate, isCompleted, toggleCompletion, updateCompletion, addItem, updateItem, moveToTrash, spawnRecurringInstances, items } = useChecklist();
   const today = useMemo(() => startOfDay(new Date()), []);
+
+  // Spawn recurring instances when the screen comes into focus (picks up newly added rules)
+  useFocusEffect(
+    useCallback(() => {
+      spawnRecurringInstances(formatDate(new Date()));
+    }, [spawnRecurringInstances])
+  );
+
   // Today's items split into pending / completed
   const todayItems = useMemo(() => getItemsForDate(today), [today, getItemsForDate, items]);
   const todayPending = useMemo(
@@ -1047,6 +1057,7 @@ function TodayTab() {
   const handleToggleRef = useRef(handleToggle);
   const colorsRef = useRef(colors);
   const moveToTrashRef = useRef(moveToTrash);
+  const swipeableRefs = useRef<Map<string, { current: SwipeableMethods | null }>>(new Map());
   const updateItemRef = useRef(updateItem);
   const allPendingEntriesRef = useRef(allPendingEntries);
   const allEntriesRef = useRef(allEntries);
@@ -1080,6 +1091,12 @@ function TodayTab() {
       return (
         <ScaleDecorator>
           <Swipeable
+            ref={(() => {
+              if (!swipeableRefs.current.has(item.id)) {
+                swipeableRefs.current.set(item.id, { current: null });
+              }
+              return swipeableRefs.current.get(item.id) as React.RefObject<SwipeableMethods | null>;
+            })()}
             renderRightActions={() => (
               <View style={styles.swipeDeleteAction}>
                 <Ionicons name="trash-outline" size={22} color="#fff" />
@@ -1088,6 +1105,15 @@ function TodayTab() {
             )}
             onSwipeableOpen={(direction: 'left' | 'right') => {
               if (direction === 'left') {
+                if (item.recurringRuleId) {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                  swipeableRefs.current.get(item.id)?.current?.close();
+                  Alert.alert(
+                    'Cannot Delete',
+                    'Instances of recurring tasks cannot be deleted. Please delete the corresponding recurring task in the Recurring menu.'
+                  );
+                  return;
+                }
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 moveToTrashRef.current(item.id, formatDate(new Date()));
               }
@@ -1252,6 +1278,13 @@ function TodayTab() {
             router.push(`/edit-checklist/${item.id}` as any);
           }}
           onDelete={(item, afterDelete) => {
+            if (item.recurringRuleId) {
+              Alert.alert(
+                'Cannot Delete',
+                'Instances of recurring tasks cannot be deleted. Please delete the corresponding recurring task in the Recurring menu.'
+              );
+              return;
+            }
             Alert.alert('Delete Item', `Delete "${item.title}"?`, [
               { text: 'Cancel', style: 'cancel' },
               {
@@ -1508,6 +1541,7 @@ function UpcomingTab() {
   const moveToTrashRef = useRef(moveToTrash);
   const colorsRef = useRef(colors);
   const updateItemRef = useRef(updateItem);
+  const swipeableRefs = useRef<Map<string, { current: SwipeableMethods | null }>>(new Map());
   moveToTrashRef.current = moveToTrash;
   colorsRef.current = colors;
   updateItemRef.current = updateItem;
@@ -1527,6 +1561,12 @@ function UpcomingTab() {
       return (
         <ScaleDecorator>
           <Swipeable
+            ref={(() => {
+              if (!swipeableRefs.current.has(item.id)) {
+                swipeableRefs.current.set(item.id, { current: null });
+              }
+              return swipeableRefs.current.get(item.id) as React.RefObject<SwipeableMethods | null>;
+            })()}
             renderRightActions={() => (
               <View style={styles.swipeDeleteAction}>
                 <Ionicons name="trash-outline" size={22} color="#fff" />
@@ -1535,6 +1575,15 @@ function UpcomingTab() {
             )}
             onSwipeableOpen={(direction: 'left' | 'right') => {
               if (direction === 'left') {
+                if (item.recurringRuleId) {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                  swipeableRefs.current.get(item.id)?.current?.close();
+                  Alert.alert(
+                    'Cannot Delete',
+                    'Instances of recurring tasks cannot be deleted. Please delete the corresponding recurring task in the Recurring menu.'
+                  );
+                  return;
+                }
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 moveToTrashRef.current(item.id, formatDate(new Date()));
               }
@@ -1719,6 +1768,13 @@ function UpcomingTab() {
             router.push(`/edit-checklist/${item.id}` as any);
           }}
           onDelete={(item, afterDelete) => {
+            if (item.recurringRuleId) {
+              Alert.alert(
+                'Cannot Delete',
+                'Instances of recurring tasks cannot be deleted. Please delete the corresponding recurring task in the Recurring menu.'
+              );
+              return;
+            }
             Alert.alert('Delete Item', `Delete "${item.title}"?`, [
               { text: 'Cancel', style: 'cancel' },
               {
@@ -1933,6 +1989,7 @@ function OverdueTab() {
   const moveToTrashRef = useRef(moveToTrash);
   const colorsRef = useRef(colors);
   const updateItemRef = useRef(updateItem);
+  const swipeableRefs = useRef<Map<string, { current: SwipeableMethods | null }>>(new Map());
   moveToTrashRef.current = moveToTrash;
   colorsRef.current = colors;
   updateItemRef.current = updateItem;
@@ -1952,6 +2009,12 @@ function OverdueTab() {
       return (
         <ScaleDecorator>
           <Swipeable
+            ref={(() => {
+              if (!swipeableRefs.current.has(item.id)) {
+                swipeableRefs.current.set(item.id, { current: null });
+              }
+              return swipeableRefs.current.get(item.id) as React.RefObject<SwipeableMethods | null>;
+            })()}
             renderRightActions={() => (
               <View style={styles.swipeDeleteAction}>
                 <Ionicons name="trash-outline" size={22} color="#fff" />
@@ -1960,6 +2023,15 @@ function OverdueTab() {
             )}
             onSwipeableOpen={(direction: 'left' | 'right') => {
               if (direction === 'left') {
+                if (item.recurringRuleId) {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                  swipeableRefs.current.get(item.id)?.current?.close();
+                  Alert.alert(
+                    'Cannot Delete',
+                    'Instances of recurring tasks cannot be deleted. Please delete the corresponding recurring task in the Recurring menu.'
+                  );
+                  return;
+                }
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 moveToTrashRef.current(item.id, formatDate(new Date()));
               }
@@ -2144,6 +2216,13 @@ function OverdueTab() {
             router.push(`/edit-checklist/${item.id}` as any);
           }}
           onDelete={(item, afterDelete) => {
+            if (item.recurringRuleId) {
+              Alert.alert(
+                'Cannot Delete',
+                'Instances of recurring tasks cannot be deleted. Please delete the corresponding recurring task in the Recurring menu.'
+              );
+              return;
+            }
             Alert.alert('Delete Item', `Delete "${item.title}"?`, [
               { text: 'Cancel', style: 'cancel' },
               {
@@ -2260,10 +2339,10 @@ function RecurringView() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
-  const { items, deleteItem } = useChecklist();
+  const { items, deleteRecurringRule } = useChecklist();
 
   const recurringItems = useMemo(
-    () => items.filter((i) => i.recurrence !== 'once' && !i.trashedAt && i.kind !== 'template'),
+    () => items.filter((i) => i.recurrence !== 'once' && !i.trashedAt && i.kind !== 'template' && !i.recurringRuleId),
     [items]
   );
 
@@ -2293,9 +2372,9 @@ function RecurringView() {
           onSwipeableOpen={(direction: 'left' | 'right') => {
             if (direction === 'left') {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              Alert.alert('Delete Recurring Task', `Delete "${item.title}"?`, [
+              Alert.alert('Delete Recurring Task', `Delete "${item.title}"? This will also delete all instances of this task.`, [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Delete', style: 'destructive', onPress: () => deleteItem(item.id) },
+                { text: 'Delete', style: 'destructive', onPress: () => deleteRecurringRule(item.id) },
               ]);
             }
           }}
@@ -2564,6 +2643,7 @@ export default function ChecklistScreen() {
   const [activeTab, setActiveTab] = useState<TabId>('today');
   const [activeView, setActiveView] = useState<ViewId>('tasks');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { spawnRecurringInstances } = useChecklist();
 
   useLayoutEffect(() => {
     navigation.setOptions({

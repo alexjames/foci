@@ -215,6 +215,8 @@ export interface ChecklistItem {
   subtasks?: Subtask[];
   kind?: ChecklistItemKind; // undefined = 'task' for backward compat
   trashedAt?: string;       // YYYY-MM-DD, set when a once-task completes at EOD
+  recurringRuleId?: string; // ID of the parent recurring rule item (for spawned instances)
+  periodDate?: string;      // YYYY-MM-DD of the canonical period date this instance covers
 }
 
 export interface ChecklistCompletion {
@@ -291,7 +293,9 @@ export type AppAction =
   | { type: 'MOVE_TO_TRASH'; payload: { itemId: string; trashedAt: string } }
   | { type: 'RESTORE_FROM_TRASH'; payload: string }
   | { type: 'DELETE_TRASH_ITEM'; payload: string }
-  | { type: 'PRUNE_TRASH'; payload: string }; // payload = today YYYY-MM-DD
+  | { type: 'PRUNE_TRASH'; payload: string }                  // payload = today YYYY-MM-DD
+  | { type: 'SPAWN_RECURRING_INSTANCES'; payload: { today: string } }
+  | { type: 'DELETE_RECURRING_RULE'; payload: string };       // ruleId — deletes rule + all instances
 
 export const STORAGE_KEYS = {
   GOALS: '@foci/goals',

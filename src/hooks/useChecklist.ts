@@ -88,7 +88,11 @@ export function useChecklist() {
   const getItemsForDate = useCallback(
     (date: Date) => {
       return state.checklistItems.filter(
-        (item) => item.kind !== 'template' && !item.trashedAt && isDueOnDate(item, date)
+        (item) =>
+          item.kind !== 'template' &&
+          !item.trashedAt &&
+          item.recurrence === 'once' && // rules have recurrence !== 'once' and are shown in RecurringView only
+          isDueOnDate(item, date)
       );
     },
     [state.checklistItems]
@@ -132,6 +136,20 @@ export function useChecklist() {
     [dispatch]
   );
 
+  const deleteRecurringRule = useCallback(
+    (ruleId: string) => {
+      dispatch({ type: 'DELETE_RECURRING_RULE', payload: ruleId });
+    },
+    [dispatch]
+  );
+
+  const spawnRecurringInstances = useCallback(
+    (today: string) => {
+      dispatch({ type: 'SPAWN_RECURRING_INSTANCES', payload: { today } });
+    },
+    [dispatch]
+  );
+
   return {
     items: state.checklistItems,
     completions: state.checklistCompletions,
@@ -143,6 +161,8 @@ export function useChecklist() {
     moveToTrash,
     restoreFromTrash,
     deleteTrashItem,
+    deleteRecurringRule,
+    spawnRecurringInstances,
     getItemsForDate,
     isCompleted,
   };
