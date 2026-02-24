@@ -50,7 +50,7 @@ export default function EditEventScreen() {
     return isNaN(parsed.getTime()) ? new Date() : parsed;
   });
   const [selectedIcon, setSelectedIcon] = useState<string>(
-    existingEvent?.icon ?? 'gift-outline'
+    existingEvent?.icon ?? 'calendar-outline'
   );
   const [selectedColor, setSelectedColor] = useState<string | undefined>(
     existingEvent?.color

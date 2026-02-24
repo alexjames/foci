@@ -150,6 +150,7 @@ export const ROUTINE_ICONS = [
 ];
 
 export const EVENT_ICONS: { id: string; icon: string; label: string }[] = [
+  { id: 'calendar-outline',       icon: 'calendar-outline',       label: 'Event' },
   { id: 'gift-outline',           icon: 'gift-outline',           label: 'Birthday' },
   { id: 'heart-outline',          icon: 'heart-outline',          label: 'Anniversary' },
   { id: 'star-outline',           icon: 'star-outline',           label: 'Holiday' },

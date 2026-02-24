@@ -147,6 +147,7 @@ export interface Routine {
   icon: string;
   orderedCards: string[];
   customCards: RoutineCustomCard[];
+  cardDurations?: Record<string, number>; // cardId → seconds, absent = 180s default
   notificationEnabled: boolean;
   notificationTime?: { hour: number; minute: number };
   createdAt: string;

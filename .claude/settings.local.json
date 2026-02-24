@@ -8,7 +8,8 @@
       "Bash(git -C /c/Users/darkm/Software/foci show HEAD:\"app/\\(tabs\\)/goals.tsx\")",
       "Bash(git -C /c/Users/darkm/Software/foci show HEAD:\"app/\\(tabs\\)/index.tsx\")",
       "Bash(python3:*)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(find:*)"
     ]
   }
 }

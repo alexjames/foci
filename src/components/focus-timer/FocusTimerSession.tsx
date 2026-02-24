@@ -22,6 +22,7 @@ import { Layout } from '@/src/constants/Layout';
 import { FocusTimerConfig, FocusTimerAlarm } from '@/src/types';
 import { FOCUS_TIMER_PRESETS } from '@/src/constants/tools';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
+import { DurationPicker } from './DurationPicker';
 import Svg, { Circle } from 'react-native-svg';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -160,15 +161,6 @@ export function FocusTimerSession() {
     handleReset();
   };
 
-  const handleAdjustDuration = (delta: number) => {
-    if (phase !== 'idle') return;
-    const newDuration = Math.max(60, Math.min(MAX_SECONDS, durationSeconds + delta));
-    setConfig({
-      ...(config ?? { toolId: 'focus-timer', lastDurationSeconds: durationSeconds, breakDurationSeconds: breakDuration, alarmType, notificationEnabled: false }),
-      lastDurationSeconds: newDuration,
-    });
-  };
-
   const handlePreset = (seconds: number) => {
     if (phase !== 'idle') return;
     setConfig({
@@ -281,18 +273,18 @@ export function FocusTimerSession() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {fullScreenModal}
 
-      {/* Duration display with steppers */}
-      <View style={styles.durationSection}>
-        <Pressable onPress={() => handleAdjustDuration(-60)}>
-          <Ionicons name="remove-circle-outline" size={36} color={colors.tint} />
-        </Pressable>
-        <Text style={[styles.durationText, { color: colors.text }]}>
-          {formatTime(durationSeconds)}
-        </Text>
-        <Pressable onPress={() => handleAdjustDuration(60)}>
-          <Ionicons name="add-circle-outline" size={36} color={colors.tint} />
-        </Pressable>
-      </View>
+      {/* Duration scroll wheel picker */}
+      <DurationPicker
+        durationSeconds={durationSeconds}
+        onChangeDuration={(seconds) => {
+          if (phase !== 'idle') return;
+          setConfig({
+            ...(config ?? { toolId: 'focus-timer', lastDurationSeconds: durationSeconds, breakDurationSeconds: breakDuration, alarmType, notificationEnabled: false }),
+            lastDurationSeconds: seconds,
+          });
+        }}
+        colors={colors}
+      />
 
       {/* Presets */}
       <View style={styles.presets}>
@@ -336,20 +328,6 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: Layout.spacing.md,
     justifyContent: 'center',
-  },
-  durationSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Layout.spacing.lg,
-    marginBottom: Layout.spacing.xl,
-  },
-  durationText: {
-    fontSize: 56,
-    fontWeight: '200',
-    fontVariant: ['tabular-nums'],
-    minWidth: 200,
-    textAlign: 'center',
   },
   presets: {
     flexDirection: 'row',

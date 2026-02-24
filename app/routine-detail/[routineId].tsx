@@ -22,9 +22,9 @@ export default function RoutineDetailScreen() {
 
   if (isPlaying) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, { backgroundColor: '#000' }]}>
         <RoutinePlayView routineId={routineId} onComplete={() => setIsPlaying(false)} />
-      </SafeAreaView>
+      </View>
     );
   }
 

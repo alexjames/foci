@@ -1,31 +1,24 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, View, Text, useColorScheme } from 'react-native';
+import { StyleSheet, View, useColorScheme } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withSequence,
-  withRepeat,
-  withDelay,
   Easing,
-  runOnJS,
 } from 'react-native-reanimated';
 import { Colors } from '@/src/constants/Colors';
-import { Layout } from '@/src/constants/Layout';
 import { BreathingPhase } from '@/src/types';
 
 interface BreathingAnimationProps {
   phases: BreathingPhase[];
   isRunning: boolean;
   currentPhaseIndex: number;
-  currentPhaseLabel: string;
 }
 
 export function BreathingAnimation({
   phases,
   isRunning,
   currentPhaseIndex,
-  currentPhaseLabel,
 }: BreathingAnimationProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
@@ -69,11 +62,7 @@ export function BreathingAnimation({
           { backgroundColor: colors.tint + '40', borderColor: colors.tint },
           circleStyle,
         ]}
-      >
-        <Text style={[styles.phaseLabel, { color: colors.tint }]}>
-          {isRunning ? currentPhaseLabel : 'Ready'}
-        </Text>
-      </Animated.View>
+      />
     </View>
   );
 }
@@ -82,18 +71,12 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    height: 280,
+    height: 260,
   },
   circle: {
     width: 220,
     height: 220,
     borderRadius: 110,
     borderWidth: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  phaseLabel: {
-    fontSize: Layout.fontSize.heading,
-    fontWeight: '600',
   },
 });

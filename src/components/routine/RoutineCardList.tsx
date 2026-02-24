@@ -1,9 +1,10 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   Pressable,
+  Modal,
   useColorScheme,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -18,6 +19,8 @@ import { Layout } from '@/src/constants/Layout';
 import { RoutinesConfig, Routine } from '@/src/types';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
 import { getPresetById } from '@/src/constants/routineCards';
+
+const DEFAULT_DURATION = 180; // 3 minutes
 
 interface RoutineCardListProps {
   routineId: string;
@@ -38,6 +41,16 @@ function resolveCard(cardId: string, routine: Routine): ResolvedCard | null {
   return null;
 }
 
+function getCardDuration(cardId: string, routine: Routine): number {
+  return routine.cardDurations?.[cardId] ?? DEFAULT_DURATION;
+}
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 function RemoveAction() {
   return (
     <View style={styles.swipeAction}>
@@ -49,18 +62,106 @@ function RemoveAction() {
   );
 }
 
+function DurationModal({
+  visible,
+  initialSeconds,
+  onClose,
+  onSave,
+}: {
+  visible: boolean;
+  initialSeconds: number;
+  onClose: () => void;
+  onSave: (seconds: number) => void;
+}) {
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+  const [value, setValue] = useState(initialSeconds);
+
+  // Reset when modal opens
+  const handleOpen = useCallback(() => {
+    setValue(initialSeconds);
+  }, [initialSeconds]);
+
+  const adjust = (delta: number) => {
+    setValue((prev) => Math.max(30, Math.min(3600, prev + delta)));
+  };
+
+  const mins = Math.floor(value / 60);
+  const secs = value % 60;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onShow={handleOpen}
+      onRequestClose={onClose}
+    >
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <Pressable
+          style={[styles.modalSheet, { backgroundColor: colors.cardBackground }]}
+          onPress={() => {}}
+        >
+          <Text style={[styles.modalTitle, { color: colors.text }]}>Card Duration</Text>
+
+          <View style={styles.stepperRow}>
+            {/* Minutes */}
+            <View style={styles.stepperGroup}>
+              <Pressable onPress={() => adjust(-60)} style={styles.stepBtn} hitSlop={8}>
+                <Ionicons name="remove-circle-outline" size={32} color={colors.tint} />
+              </Pressable>
+              <Text style={[styles.stepValue, { color: colors.text }]}>{mins}</Text>
+              <Pressable onPress={() => adjust(60)} style={styles.stepBtn} hitSlop={8}>
+                <Ionicons name="add-circle-outline" size={32} color={colors.tint} />
+              </Pressable>
+              <Text style={[styles.stepLabel, { color: colors.secondaryText }]}>min</Text>
+            </View>
+
+            <Text style={[styles.stepColon, { color: colors.secondaryText }]}>:</Text>
+
+            {/* Seconds */}
+            <View style={styles.stepperGroup}>
+              <Pressable onPress={() => adjust(-10)} style={styles.stepBtn} hitSlop={8}>
+                <Ionicons name="remove-circle-outline" size={32} color={colors.tint} />
+              </Pressable>
+              <Text style={[styles.stepValue, { color: colors.text }]}>{secs.toString().padStart(2, '0')}</Text>
+              <Pressable onPress={() => adjust(10)} style={styles.stepBtn} hitSlop={8}>
+                <Ionicons name="add-circle-outline" size={32} color={colors.tint} />
+              </Pressable>
+              <Text style={[styles.stepLabel, { color: colors.secondaryText }]}>sec</Text>
+            </View>
+          </View>
+
+          <Pressable
+            onPress={() => { onSave(value); onClose(); }}
+            style={[styles.saveBtn, { backgroundColor: colors.tint }]}
+          >
+            <Text style={styles.saveBtnText}>Done</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 function SwipeableCard({
   card,
   index,
   drag,
   isActive,
+  duration,
+  showHandle,
   onRemove,
+  onEditDuration,
 }: {
   card: ResolvedCard;
   index: number;
   drag: () => void;
   isActive: boolean;
+  duration: number;
+  showHandle: boolean;
   onRemove: (id: string) => void;
+  onEditDuration: (id: string) => void;
 }) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
@@ -104,7 +205,18 @@ function SwipeableCard({
             {card.description}
           </Text>
         </View>
-        <Ionicons name="menu" size={20} color={colors.secondaryText} />
+        <Pressable
+          onPress={() => onEditDuration(card.id)}
+          hitSlop={8}
+          style={[styles.durationBadge, { backgroundColor: colors.background }]}
+        >
+          <Text style={[styles.durationText, { color: colors.secondaryText }]}>
+            {formatDuration(duration)}
+          </Text>
+        </Pressable>
+        {showHandle && (
+          <Ionicons name="menu" size={20} color={colors.secondaryText} style={styles.dragHandle} />
+        )}
       </Pressable>
     </Swipeable>
   );
@@ -115,6 +227,9 @@ export function RoutineCardList({ routineId, onPlay }: RoutineCardListProps) {
   const colors = Colors[colorScheme];
   const router = useRouter();
   const { config, setConfig } = useToolConfig<RoutinesConfig>('routines');
+
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const routine = config?.routines.find((r) => r.id === routineId);
 
@@ -153,6 +268,22 @@ export function RoutineCardList({ routineId, onPlay }: RoutineCardListProps) {
           r.id === routineId ? { ...r, orderedCards: data.map((c) => c.id) } : r
         ),
       });
+      setIsDragging(false);
+    },
+    [routine, config, routineId, setConfig]
+  );
+
+  const handleSaveDuration = useCallback(
+    (cardId: string, seconds: number) => {
+      if (!routine || !config) return;
+      setConfig({
+        ...config,
+        routines: config.routines.map((r) =>
+          r.id === routineId
+            ? { ...r, cardDurations: { ...r.cardDurations, [cardId]: seconds } }
+            : r
+        ),
+      });
     },
     [routine, config, routineId, setConfig]
   );
@@ -163,14 +294,19 @@ export function RoutineCardList({ routineId, onPlay }: RoutineCardListProps) {
         <SwipeableCard
           card={item}
           index={getIndex() ?? 0}
-          drag={drag}
+          drag={() => { setIsDragging(true); drag(); }}
           isActive={isActive}
+          duration={getCardDuration(item.id, routine!)}
+          showHandle={isDragging}
           onRemove={handleRemove}
+          onEditDuration={setEditingCardId}
         />
       </ScaleDecorator>
     ),
-    [handleRemove]
+    [handleRemove, routine, isDragging]
   );
+
+  const editingCard = editingCardId ? cards.find((c) => c.id === editingCardId) : null;
 
   if (cards.length === 0) {
     return (
@@ -218,6 +354,15 @@ export function RoutineCardList({ routineId, onPlay }: RoutineCardListProps) {
           <Ionicons name="play" size={28} color="#fff" />
         </Pressable>
       </View>
+
+      {editingCard && routine && (
+        <DurationModal
+          visible={!!editingCardId}
+          initialSeconds={getCardDuration(editingCard.id, routine)}
+          onClose={() => setEditingCardId(null)}
+          onSave={(seconds) => handleSaveDuration(editingCard.id, seconds)}
+        />
+      )}
     </View>
   );
 }
@@ -280,6 +425,19 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.caption,
     marginTop: 2,
   },
+  dragHandle: {
+    opacity: 0.4,
+  },
+  durationBadge: {
+    paddingHorizontal: Layout.spacing.sm,
+    paddingVertical: 4,
+    borderRadius: Layout.borderRadius.sm,
+  },
+  durationText: {
+    fontSize: Layout.fontSize.caption,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
   emptyState: {
     flex: 1,
     alignItems: 'center',
@@ -331,5 +489,61 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: Layout.spacing.xl,
+    paddingBottom: 40,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: Layout.fontSize.title,
+    fontWeight: '600',
+    marginBottom: Layout.spacing.xl,
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Layout.spacing.lg,
+    marginBottom: Layout.spacing.xl,
+  },
+  stepperGroup: {
+    alignItems: 'center',
+    gap: Layout.spacing.sm,
+  },
+  stepBtn: {},
+  stepValue: {
+    fontSize: 40,
+    fontWeight: '200',
+    fontVariant: ['tabular-nums'],
+    minWidth: 60,
+    textAlign: 'center',
+  },
+  stepLabel: {
+    fontSize: Layout.fontSize.caption,
+  },
+  stepColon: {
+    fontSize: 40,
+    fontWeight: '200',
+    marginTop: 48,
+  },
+  saveBtn: {
+    paddingHorizontal: Layout.spacing.xxl,
+    paddingVertical: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.lg,
+    minWidth: 200,
+    alignItems: 'center',
+  },
+  saveBtnText: {
+    color: '#fff',
+    fontSize: Layout.fontSize.body,
+    fontWeight: '600',
   },
 });
