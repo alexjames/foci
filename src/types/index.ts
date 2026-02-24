@@ -196,6 +196,12 @@ export interface HomeToolEntry {
 
 export type RecurrenceType = 'once' | 'daily' | 'specific-days' | 'every-n-days' | 'weekdays' | 'weekends';
 
+export interface Subtask {
+  id: string;
+  title: string;
+  completedDates: string[]; // YYYY-MM-DD strings
+}
+
 export interface ChecklistItem {
   id: string;
   title: string;
@@ -204,6 +210,7 @@ export interface ChecklistItem {
   everyNDays?: number;
   startDate: string;
   createdAt: string;
+  subtasks?: Subtask[];
 }
 
 export interface ChecklistCompletion {

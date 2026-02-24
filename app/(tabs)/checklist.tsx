@@ -20,7 +20,7 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
 import { useChecklist, isDueOnDate } from '@/src/hooks/useChecklist';
-import { ChecklistItem } from '@/src/types';
+import { ChecklistItem, Subtask } from '@/src/types';
 import * as Haptics from 'expo-haptics';
 import DraggableFlatList, {
   RenderItemParams,
@@ -369,6 +369,7 @@ interface TaskDetailModalProps {
   onEdit: (item: ChecklistItem) => void;
   onDelete: (item: ChecklistItem, afterDelete: () => void) => void;
   onReschedule: (item: ChecklistItem, newDate: Date) => void;
+  onUpdateItem: (item: ChecklistItem) => void;
 }
 
 function TaskDetailModal({
@@ -381,18 +382,81 @@ function TaskDetailModal({
   onEdit,
   onDelete,
   onReschedule,
+  onUpdateItem,
 }: TaskDetailModalProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const [index, setIndex] = useState(initialIndex);
   const [focusItem, setFocusItem] = useState<DetailEntry | null>(null);
+  const [subtaskInput, setSubtaskInput] = useState('');
+  const [showSubtaskInput, setShowSubtaskInput] = useState(false);
+  const subtaskInputRef = useRef<TextInput>(null);
 
   const current = entries[index];
+
+  // Reset subtask input when navigating between entries
+  useEffect(() => {
+    setSubtaskInput('');
+    setShowSubtaskInput(false);
+  }, [index]);
+
   if (!current) return null;
 
+  const dateStr = formatDate(current.date);
   const done = isCompleted(current.item.id, current.date);
   const today = startOfDay(new Date());
   const isToday = formatDate(current.date) === formatDate(today);
+  const subtasks: Subtask[] = current.item.subtasks ?? [];
+  const allSubtasksDone = subtasks.length > 0 && subtasks.every((s) => s.completedDates.includes(dateStr));
+
+  const toggleSubtask = (subtask: Subtask) => {
+    const alreadyDone = subtask.completedDates.includes(dateStr);
+    const newSubtask: Subtask = {
+      ...subtask,
+      completedDates: alreadyDone
+        ? subtask.completedDates.filter((d) => d !== dateStr)
+        : [...subtask.completedDates, dateStr],
+    };
+    const newSubtasks = subtasks.map((s) => s.id === subtask.id ? newSubtask : s);
+    const updatedItem = { ...current.item, subtasks: newSubtasks };
+    onUpdateItem(updatedItem);
+
+    // Auto-check parent when all subtasks are done
+    const nowAllDone = newSubtasks.every((s) => s.completedDates.includes(dateStr));
+    if (nowAllDone && !done) {
+      onToggle(updatedItem, current.date);
+    }
+    // Auto-uncheck parent when a subtask is unchecked
+    if (alreadyDone && done) {
+      onToggle(updatedItem, current.date);
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const addSubtask = () => {
+    const title = subtaskInput.trim();
+    if (!title) return;
+    const newSubtask: Subtask = {
+      id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      title,
+      completedDates: [],
+    };
+    onUpdateItem({ ...current.item, subtasks: [...subtasks, newSubtask] });
+    setSubtaskInput('');
+  };
+
+  // When parent is toggled off externally, uncheck all subtasks for this date
+  const handleParentToggle = () => {
+    if (done && subtasks.length > 0) {
+      // Unchecking parent — clear all subtask completions for this date
+      const newSubtasks = subtasks.map((s) => ({
+        ...s,
+        completedDates: s.completedDates.filter((d) => d !== dateStr),
+      }));
+      onUpdateItem({ ...current.item, subtasks: newSubtasks });
+    }
+    onToggle(current.item, current.date);
+  };
 
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -452,6 +516,7 @@ function TaskDetailModal({
           </View>
         </View>
 
+        <ScrollView contentContainerStyle={detailStyles.scrollContent} keyboardShouldPersistTaps="handled">
         {/* Card */}
         <View style={[detailStyles.card, { backgroundColor: colors.cardBackground }]}>
           <Text style={[detailStyles.cardTitle, { color: colors.text }]}>
@@ -487,7 +552,113 @@ function TaskDetailModal({
             </Pressable>
           </View>
 
-          {done && (
+          {/* Subtasks */}
+          {subtasks.length > 0 && (
+            <View style={detailStyles.subtaskList}>
+              <DraggableFlatList
+                data={subtasks}
+                keyExtractor={(s) => s.id}
+                scrollEnabled={false}
+                activationDistance={8}
+                onDragEnd={({ data }) => {
+                  onUpdateItem({ ...current.item, subtasks: data });
+                }}
+                renderItem={({ item: subtask, drag, isActive: subtaskActive }) => {
+                  const subtaskDone = subtask.completedDates.includes(dateStr);
+                  return (
+                    <ScaleDecorator>
+                      <Swipeable
+                        renderRightActions={() => (
+                          <View style={detailStyles.subtaskDeleteAction}>
+                            <Ionicons name="trash-outline" size={18} color="#fff" />
+                          </View>
+                        )}
+                        onSwipeableOpen={(direction: 'left' | 'right') => {
+                          if (direction === 'left') {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                            onUpdateItem({
+                              ...current.item,
+                              subtasks: subtasks.filter((s) => s.id !== subtask.id),
+                            });
+                          }
+                        }}
+                        overshootRight={false}
+                        enabled={!subtaskActive}
+                      >
+                        <Pressable
+                          style={[detailStyles.subtaskRow, { backgroundColor: colors.cardBackground }]}
+                          onPress={() => toggleSubtask(subtask)}
+                          onLongPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                            drag();
+                          }}
+                          delayLongPress={300}
+                        >
+                          <View style={[
+                            detailStyles.subtaskCheckbox,
+                            subtaskDone
+                              ? { backgroundColor: colors.tint, borderColor: colors.tint }
+                              : { backgroundColor: 'transparent', borderColor: colors.secondaryText },
+                          ]}>
+                            {subtaskDone && <Ionicons name="checkmark" size={12} color="#fff" />}
+                          </View>
+                          <Text style={[
+                            detailStyles.subtaskTitle,
+                            { color: subtaskDone ? colors.secondaryText : colors.text },
+                            subtaskDone && { textDecorationLine: 'line-through' },
+                          ]}>
+                            {subtask.title}
+                          </Text>
+                          {subtaskActive && (
+                            <Ionicons name="reorder-three-outline" size={18} color={colors.secondaryText} style={{ opacity: 0.4 }} />
+                          )}
+                        </Pressable>
+                      </Swipeable>
+                    </ScaleDecorator>
+                  );
+                }}
+              />
+            </View>
+          )}
+
+          {/* Add subtask row */}
+          {showSubtaskInput ? (
+            <View style={detailStyles.subtaskInputRow}>
+              <View style={[detailStyles.subtaskCheckbox, { backgroundColor: 'transparent', borderColor: colors.cardBorder }]} />
+              <TextInput
+                ref={subtaskInputRef}
+                style={[detailStyles.subtaskInput, { color: colors.text }]}
+                placeholder="New subtask…"
+                placeholderTextColor={colors.secondaryText}
+                value={subtaskInput}
+                onChangeText={setSubtaskInput}
+                onSubmitEditing={() => {
+                  addSubtask();
+                  setTimeout(() => subtaskInputRef.current?.focus(), 50);
+                }}
+                onBlur={() => {
+                  addSubtask();
+                  setShowSubtaskInput(false);
+                }}
+                returnKeyType="done"
+                blurOnSubmit={false}
+                autoFocus
+              />
+            </View>
+          ) : (
+            <Pressable
+              style={detailStyles.addSubtaskBtn}
+              onPress={() => {
+                setShowSubtaskInput(true);
+                setTimeout(() => subtaskInputRef.current?.focus(), 50);
+              }}
+            >
+              <Ionicons name="add" size={16} color={colors.tint} />
+              <Text style={[detailStyles.addSubtaskText, { color: colors.tint }]}>Add subtask</Text>
+            </Pressable>
+          )}
+
+          {(done || allSubtasksDone) && (
             <View style={detailStyles.completedBadge}>
               <Ionicons name="checkmark-circle" size={16} color="#34C759" />
               <Text style={detailStyles.completedBadgeText}>Completed</Text>
@@ -507,7 +678,7 @@ function TaskDetailModal({
 
           <Pressable
             style={[detailStyles.checkBtn, { borderColor: done ? colors.tint : colors.cardBorder, backgroundColor: done ? colors.tint : 'transparent' }]}
-            onPress={() => onToggle(current.item, current.date)}
+            onPress={handleParentToggle}
           >
             <Ionicons name={done ? 'checkmark' : 'square-outline'} size={18} color={done ? '#fff' : colors.secondaryText} />
             <Text style={[detailStyles.checkBtnText, { color: done ? '#fff' : colors.secondaryText }]}>
@@ -533,6 +704,7 @@ function TaskDetailModal({
             <Ionicons name="chevron-down" size={24} color={colors.text} />
           </Pressable>
         </View>
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -542,6 +714,9 @@ const detailStyles = StyleSheet.create({
   sheet: {
     flex: 1,
     paddingTop: Layout.spacing.md,
+  },
+  scrollContent: {
+    paddingBottom: Layout.spacing.sm,
   },
   header: {
     flexDirection: 'row',
@@ -577,8 +752,6 @@ const detailStyles = StyleSheet.create({
     marginHorizontal: Layout.spacing.lg,
     borderRadius: Layout.borderRadius.lg,
     padding: Layout.spacing.xl,
-    minHeight: 160,
-    justifyContent: 'center',
   },
   cardTitle: {
     fontSize: 28,
@@ -602,7 +775,7 @@ const detailStyles = StyleSheet.create({
   },
   actions: {
     paddingHorizontal: Layout.spacing.lg,
-    paddingTop: Layout.spacing.lg,
+    paddingTop: Layout.spacing.sm,
     gap: Layout.spacing.md,
   },
   focusBtn: {
@@ -630,6 +803,57 @@ const detailStyles = StyleSheet.create({
   checkBtnText: {
     fontSize: Layout.fontSize.body,
     fontWeight: '600',
+  },
+  subtaskList: {
+    marginTop: Layout.spacing.lg,
+    gap: Layout.spacing.sm,
+  },
+  subtaskDeleteAction: {
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 52,
+    borderRadius: Layout.borderRadius.md,
+  },
+  subtaskRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.sm,
+    paddingVertical: Layout.spacing.xs,
+  },
+  subtaskCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  subtaskTitle: {
+    fontSize: Layout.fontSize.body,
+    flex: 1,
+  },
+  subtaskInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.sm,
+    paddingVertical: Layout.spacing.xs,
+    marginTop: Layout.spacing.sm,
+  },
+  subtaskInput: {
+    flex: 1,
+    fontSize: Layout.fontSize.body,
+  },
+  addSubtaskBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.xs,
+    paddingTop: Layout.spacing.md,
+  },
+  addSubtaskText: {
+    fontSize: Layout.fontSize.caption,
+    fontWeight: '500',
   },
   rescheduleRow: {
     flexDirection: 'row',
@@ -714,11 +938,15 @@ function TodayTab() {
   // Convert source arrays to DragItem arrays (local order state lives here)
   const [todayDragItems, setTodayDragItems] = useState<DragItem[]>([]);
 
-  // Sync drag items from source whenever source changes (skip during drag)
+  // Sync drag items from source whenever source changes (skip during drag or subtask update)
   const isDragging = useRef(false);
+  const isSubtaskUpdate = useRef(false);
 
   React.useEffect(() => {
-    if (isDragging.current) return;
+    if (isDragging.current || isSubtaskUpdate.current) {
+      isSubtaskUpdate.current = false;
+      return;
+    }
     setTodayDragItems(todayPendingFiltered.map((item) => ({ section: 'today' as SectionId, item, date: today, key: `today-${item.id}` })));
   }, [todayPendingFiltered, today]);
 
@@ -812,11 +1040,17 @@ function TodayTab() {
   const handleToggleRef = useRef(handleToggle);
   const colorsRef = useRef(colors);
   const deleteItemRef = useRef(deleteItem);
+  const updateItemRef = useRef(updateItem);
   const allPendingEntriesRef = useRef(allPendingEntries);
   handleToggleRef.current = handleToggle;
   colorsRef.current = colors;
   deleteItemRef.current = deleteItem;
+  updateItemRef.current = updateItem;
   allPendingEntriesRef.current = allPendingEntries;
+
+  const [expandedSubtaskIds, setExpandedSubtaskIds] = useState<Set<string>>(new Set());
+  const expandedSubtaskIdsRef = useRef(expandedSubtaskIds);
+  expandedSubtaskIdsRef.current = expandedSubtaskIds;
 
   const handleSectionDragEnd = useCallback(
     (section: SectionId, newOrder: DragItem[]) => {
@@ -830,6 +1064,10 @@ function TodayTab() {
     ({ item: entry, drag, isActive }: RenderItemParams<DragItem>) => {
       const colors = colorsRef.current;
       const { item, date, section } = entry;
+      const dateStr = formatDate(date);
+      const subtasks = item.subtasks ?? [];
+      const expanded = expandedSubtaskIdsRef.current.has(item.id);
+      const hasSubtasks = subtasks.length > 0;
       return (
         <ScaleDecorator>
           <Swipeable
@@ -853,6 +1091,7 @@ function TodayTab() {
                 styles.itemRow,
                 { backgroundColor: colors.cardBackground },
                 isActive && styles.itemRowActive,
+                (expanded && hasSubtasks) && { alignItems: 'flex-start' },
               ]}
             >
               <Pressable
@@ -861,47 +1100,125 @@ function TodayTab() {
                 style={[
                   styles.circleCheckbox,
                   { backgroundColor: 'transparent', borderColor: colors.secondaryText },
+                  (expanded && hasSubtasks) && { marginTop: 2 },
                 ]}
               />
-              <Pressable
-                style={styles.itemRowContent}
-                onPress={() => {
-                  const idx = allPendingEntriesRef.current.findIndex((e) => e.item.id === item.id);
-                  setDetailIndex(idx >= 0 ? idx : 0);
-                }}
-                onLongPress={() => {
-                  isDragging.current = true;
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  drag();
-                }}
-                delayLongPress={300}
-              >
-                <Text
-                  style={[styles.itemTitle, { color: colors.text }]}
-                  numberOfLines={1}
+              <View style={styles.itemExpandBlock}>
+                <Pressable
+                  style={styles.itemRowContent}
+                  onPress={() => {
+                    const idx = allPendingEntriesRef.current.findIndex((e) => e.item.id === item.id);
+                    setDetailIndex(idx >= 0 ? idx : 0);
+                  }}
+                  onLongPress={() => {
+                    isDragging.current = true;
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    drag();
+                  }}
+                  delayLongPress={300}
                 >
-                  {item.title}
-                </Text>
-                {section === 'week' && !isActive && (
-                  <Text style={[styles.weekDateLabel, { color: colors.secondaryText }]}>
-                    {formatDisplayDate(date)}
-                  </Text>
+                  <View style={styles.itemTitleBlock}>
+                    <Text
+                      style={[styles.itemTitle, { color: colors.text }]}
+                      numberOfLines={1}
+                    >
+                      {item.title}
+                    </Text>
+                    {!isActive && !expanded && hasSubtasks && (
+                      <View style={styles.subtaskPill}>
+                        <Ionicons name="list-outline" size={11} color={colors.secondaryText} />
+                        <Text style={[styles.subtaskPillText, { color: colors.secondaryText }]}>
+                          {subtasks.length}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  {section === 'week' && !isActive && (
+                    <Text style={[styles.weekDateLabel, { color: colors.secondaryText }]}>
+                      {formatDisplayDate(date)}
+                    </Text>
+                  )}
+                  {isActive && (
+                    <Ionicons
+                      name="reorder-three-outline"
+                      size={20}
+                      color={colors.secondaryText}
+                      style={{ opacity: 0.4 }}
+                    />
+                  )}
+                  {!isActive && hasSubtasks && (
+                    <Pressable
+                      hitSlop={8}
+                      onPress={() => {
+                        setExpandedSubtaskIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(item.id)) next.delete(item.id);
+                          else next.add(item.id);
+                          return next;
+                        });
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }}
+                      style={styles.subtaskExpandBtn}
+                    >
+                      <Ionicons
+                        name={expanded ? 'remove' : 'add'}
+                        size={16}
+                        color={colors.tint}
+                      />
+                    </Pressable>
+                  )}
+                </Pressable>
+                {expanded && hasSubtasks && (
+                  <View style={styles.inlineSubtaskList}>
+                    {subtasks.map((subtask) => {
+                      const subtaskDone = subtask.completedDates.includes(dateStr);
+                      return (
+                        <Pressable
+                          key={subtask.id}
+                          style={styles.inlineSubtaskRow}
+                          onPress={() => {
+                            const alreadyDone = subtask.completedDates.includes(dateStr);
+                            const newSubtask: Subtask = {
+                              ...subtask,
+                              completedDates: alreadyDone
+                                ? subtask.completedDates.filter((d) => d !== dateStr)
+                                : [...subtask.completedDates, dateStr],
+                            };
+                            const newSubtasks = subtasks.map((s) => s.id === subtask.id ? newSubtask : s);
+                            const updatedItem = { ...item, subtasks: newSubtasks };
+                            isSubtaskUpdate.current = true;
+                            updateItemRef.current(updatedItem);
+                            setTodayDragItems((prev) => prev.map((e) => e.item.id === item.id ? { ...e, item: updatedItem } : e));
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          }}
+                        >
+                          <View style={[
+                            styles.inlineSubtaskCheckbox,
+                            subtaskDone
+                              ? { backgroundColor: colors.tint, borderColor: colors.tint }
+                              : { backgroundColor: 'transparent', borderColor: colors.secondaryText },
+                          ]}>
+                            {subtaskDone && <Ionicons name="checkmark" size={10} color="#fff" />}
+                          </View>
+                          <Text style={[
+                            styles.inlineSubtaskTitle,
+                            { color: subtaskDone ? colors.secondaryText : colors.text },
+                            subtaskDone && { textDecorationLine: 'line-through' },
+                          ]}>
+                            {subtask.title}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
                 )}
-                {isActive && (
-                  <Ionicons
-                    name="reorder-three-outline"
-                    size={20}
-                    color={colors.secondaryText}
-                    style={{ opacity: 0.4 }}
-                  />
-                )}
-              </Pressable>
+              </View>
             </View>
           </Swipeable>
         </ScaleDecorator>
       );
     },
-    []
+    [expandedSubtaskIds]
   );
 
   const allCompleted = useMemo(
@@ -941,6 +1258,7 @@ function TodayTab() {
           onReschedule={(item, newDate) => {
             updateItem({ ...item, recurrence: 'once', startDate: formatDate(newDate) });
           }}
+          onUpdateItem={updateItem}
         />
       )}
       <KeyboardAvoidingView
@@ -1094,17 +1412,21 @@ function UpcomingTab() {
   const [laterDragItems, setLaterDragItems] = useState<DragItem[]>([]);
 
   const isDragging = useRef(false);
+  const isSubtaskUpdate = useRef(false);
 
   useEffect(() => {
-    if (!isDragging.current) setTomorrowDragItems(tomorrowEntries);
+    if (isDragging.current || isSubtaskUpdate.current) { isSubtaskUpdate.current = false; return; }
+    setTomorrowDragItems(tomorrowEntries);
   }, [tomorrowEntries]);
 
   useEffect(() => {
-    if (!isDragging.current) setWeekDragItems(weekEntries);
+    if (isDragging.current || isSubtaskUpdate.current) { isSubtaskUpdate.current = false; return; }
+    setWeekDragItems(weekEntries);
   }, [weekEntries]);
 
   useEffect(() => {
-    if (!isDragging.current) setLaterDragItems(laterEntries);
+    if (isDragging.current || isSubtaskUpdate.current) { isSubtaskUpdate.current = false; return; }
+    setLaterDragItems(laterEntries);
   }, [laterEntries]);
 
   const [tomorrowOpen, setTomorrowOpen] = useState(true);
@@ -1165,13 +1487,23 @@ function UpcomingTab() {
 
   const deleteItemRef = useRef(deleteItem);
   const colorsRef = useRef(colors);
+  const updateItemRef = useRef(updateItem);
   deleteItemRef.current = deleteItem;
   colorsRef.current = colors;
+  updateItemRef.current = updateItem;
+
+  const [expandedSubtaskIds, setExpandedSubtaskIds] = useState<Set<string>>(new Set());
+  const expandedSubtaskIdsRef = useRef(expandedSubtaskIds);
+  expandedSubtaskIdsRef.current = expandedSubtaskIds;
 
   const renderDragItem = useCallback(
     ({ item: entry, drag, isActive }: RenderItemParams<DragItem>) => {
       const c = colorsRef.current;
       const { item, date, section } = entry;
+      const dateStr = formatDate(date);
+      const subtasks = item.subtasks ?? [];
+      const expanded = expandedSubtaskIdsRef.current.has(item.id);
+      const hasSubtasks = subtasks.length > 0;
       return (
         <ScaleDecorator>
           <Swipeable
@@ -1195,6 +1527,7 @@ function UpcomingTab() {
                 styles.itemRow,
                 { backgroundColor: c.cardBackground },
                 isActive && styles.itemRowActive,
+                (expanded && hasSubtasks) && { alignItems: 'flex-start' },
               ]}
             >
               <Pressable
@@ -1208,48 +1541,129 @@ function UpcomingTab() {
                   isCompleted(item.id, date)
                     ? { backgroundColor: c.tint, borderColor: c.tint }
                     : { backgroundColor: 'transparent', borderColor: c.secondaryText },
+                  (expanded && hasSubtasks) && { marginTop: 2 },
                 ]}
               >
                 {isCompleted(item.id, date) && (
                   <Ionicons name="checkmark" size={14} color="#fff" />
                 )}
               </Pressable>
-              <Pressable
-                style={styles.itemRowContent}
-                onPress={() => {
-                  const idx = allEntriesRef.current.findIndex((e) => e.item.id === item.id);
-                  setDetailIndex(idx >= 0 ? idx : 0);
-                }}
-                onLongPress={() => {
-                  isDragging.current = true;
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  drag();
-                }}
-                delayLongPress={300}
-              >
-                <Text style={[styles.itemTitle, { color: c.text }]} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                {(section === 'week' || section === 'later') && !isActive && (
-                  <Text style={[styles.weekDateLabel, { color: c.secondaryText }]}>
-                    {formatDisplayDate(date)}
-                  </Text>
+              <View style={styles.itemExpandBlock}>
+                <Pressable
+                  style={styles.itemRowContent}
+                  onPress={() => {
+                    const idx = allEntriesRef.current.findIndex((e) => e.item.id === item.id);
+                    setDetailIndex(idx >= 0 ? idx : 0);
+                  }}
+                  onLongPress={() => {
+                    isDragging.current = true;
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    drag();
+                  }}
+                  delayLongPress={300}
+                >
+                  <View style={styles.itemTitleBlock}>
+                    <Text style={[styles.itemTitle, { color: c.text }]} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    {!isActive && !expanded && hasSubtasks && (
+                      <View style={styles.subtaskPill}>
+                        <Ionicons name="list-outline" size={11} color={c.secondaryText} />
+                        <Text style={[styles.subtaskPillText, { color: c.secondaryText }]}>
+                          {subtasks.length}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  {(section === 'week' || section === 'later') && !isActive && (
+                    <Text style={[styles.weekDateLabel, { color: c.secondaryText }]}>
+                      {formatDisplayDate(date)}
+                    </Text>
+                  )}
+                  {isActive && (
+                    <Ionicons
+                      name="reorder-three-outline"
+                      size={20}
+                      color={c.secondaryText}
+                      style={{ opacity: 0.4 }}
+                    />
+                  )}
+                  {!isActive && hasSubtasks && (
+                    <Pressable
+                      hitSlop={8}
+                      onPress={() => {
+                        setExpandedSubtaskIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(item.id)) next.delete(item.id);
+                          else next.add(item.id);
+                          return next;
+                        });
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }}
+                      style={styles.subtaskExpandBtn}
+                    >
+                      <Ionicons
+                        name={expanded ? 'remove' : 'add'}
+                        size={16}
+                        color={c.tint}
+                      />
+                    </Pressable>
+                  )}
+                </Pressable>
+                {expanded && hasSubtasks && (
+                  <View style={styles.inlineSubtaskList}>
+                    {subtasks.map((subtask) => {
+                      const subtaskDone = subtask.completedDates.includes(dateStr);
+                      return (
+                        <Pressable
+                          key={subtask.id}
+                          style={styles.inlineSubtaskRow}
+                          onPress={() => {
+                            const alreadyDone = subtask.completedDates.includes(dateStr);
+                            const newSubtask: Subtask = {
+                              ...subtask,
+                              completedDates: alreadyDone
+                                ? subtask.completedDates.filter((d) => d !== dateStr)
+                                : [...subtask.completedDates, dateStr],
+                            };
+                            const newSubtasks = subtasks.map((s) => s.id === subtask.id ? newSubtask : s);
+                            const updatedItem = { ...item, subtasks: newSubtasks };
+                            const patchList = (prev: DragItem[]) => prev.map((e) => e.item.id === item.id ? { ...e, item: updatedItem } : e);
+                            isSubtaskUpdate.current = true;
+                            setTomorrowDragItems(patchList);
+                            setWeekDragItems(patchList);
+                            setLaterDragItems(patchList);
+                            updateItemRef.current(updatedItem);
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          }}
+                        >
+                          <View style={[
+                            styles.inlineSubtaskCheckbox,
+                            subtaskDone
+                              ? { backgroundColor: c.tint, borderColor: c.tint }
+                              : { backgroundColor: 'transparent', borderColor: c.secondaryText },
+                          ]}>
+                            {subtaskDone && <Ionicons name="checkmark" size={10} color="#fff" />}
+                          </View>
+                          <Text style={[
+                            styles.inlineSubtaskTitle,
+                            { color: subtaskDone ? c.secondaryText : c.text },
+                            subtaskDone && { textDecorationLine: 'line-through' },
+                          ]}>
+                            {subtask.title}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
                 )}
-                {isActive && (
-                  <Ionicons
-                    name="reorder-three-outline"
-                    size={20}
-                    color={c.secondaryText}
-                    style={{ opacity: 0.4 }}
-                  />
-                )}
-              </Pressable>
+              </View>
             </View>
           </Swipeable>
         </ScaleDecorator>
       );
     },
-    [isCompleted, toggleCompletion]
+    [isCompleted, toggleCompletion, expandedSubtaskIds]
   );
 
   const hasAnything =
@@ -1300,6 +1714,7 @@ function UpcomingTab() {
           onReschedule={(item, newDate) => {
             updateItem({ ...item, recurrence: 'once', startDate: formatDate(newDate) });
           }}
+          onUpdateItem={updateItem}
         />
       )}
       <ScrollView style={styles.tabContent} contentContainerStyle={styles.listContent}>
@@ -1411,17 +1826,21 @@ function OverdueTab() {
   const [earlierDragItems, setEarlierDragItems] = useState<DragItem[]>([]);
 
   const isDragging = useRef(false);
+  const isSubtaskUpdate = useRef(false);
 
   useEffect(() => {
-    if (!isDragging.current) setYesterdayDragItems(yesterdayEntries);
+    if (isDragging.current || isSubtaskUpdate.current) { isSubtaskUpdate.current = false; return; }
+    setYesterdayDragItems(yesterdayEntries);
   }, [yesterdayEntries]);
 
   useEffect(() => {
-    if (!isDragging.current) setWeekDragItems(weekEntries);
+    if (isDragging.current || isSubtaskUpdate.current) { isSubtaskUpdate.current = false; return; }
+    setWeekDragItems(weekEntries);
   }, [weekEntries]);
 
   useEffect(() => {
-    if (!isDragging.current) setEarlierDragItems(earlierEntries);
+    if (isDragging.current || isSubtaskUpdate.current) { isSubtaskUpdate.current = false; return; }
+    setEarlierDragItems(earlierEntries);
   }, [earlierEntries]);
 
   const [yesterdayOpen, setYesterdayOpen] = useState(true);
@@ -1482,13 +1901,23 @@ function OverdueTab() {
 
   const deleteItemRef = useRef(deleteItem);
   const colorsRef = useRef(colors);
+  const updateItemRef = useRef(updateItem);
   deleteItemRef.current = deleteItem;
   colorsRef.current = colors;
+  updateItemRef.current = updateItem;
+
+  const [expandedSubtaskIds, setExpandedSubtaskIds] = useState<Set<string>>(new Set());
+  const expandedSubtaskIdsRef = useRef(expandedSubtaskIds);
+  expandedSubtaskIdsRef.current = expandedSubtaskIds;
 
   const renderDragItem = useCallback(
     ({ item: entry, drag, isActive }: RenderItemParams<DragItem>) => {
       const c = colorsRef.current;
       const { item, date, section } = entry;
+      const dateStr = formatDate(date);
+      const subtasks = item.subtasks ?? [];
+      const expanded = expandedSubtaskIdsRef.current.has(item.id);
+      const hasSubtasks = subtasks.length > 0;
       return (
         <ScaleDecorator>
           <Swipeable
@@ -1512,6 +1941,7 @@ function OverdueTab() {
                 styles.itemRow,
                 { backgroundColor: c.cardBackground },
                 isActive && styles.itemRowActive,
+                (expanded && hasSubtasks) && { alignItems: 'flex-start' },
               ]}
             >
               <Pressable
@@ -1525,48 +1955,129 @@ function OverdueTab() {
                   isCompleted(item.id, date)
                     ? { backgroundColor: c.tint, borderColor: c.tint }
                     : { backgroundColor: 'transparent', borderColor: c.secondaryText },
+                  (expanded && hasSubtasks) && { marginTop: 2 },
                 ]}
               >
                 {isCompleted(item.id, date) && (
                   <Ionicons name="checkmark" size={14} color="#fff" />
                 )}
               </Pressable>
-              <Pressable
-                style={styles.itemRowContent}
-                onPress={() => {
-                  const idx = allEntriesRef.current.findIndex((e) => e.item.id === item.id);
-                  setDetailIndex(idx >= 0 ? idx : 0);
-                }}
-                onLongPress={() => {
-                  isDragging.current = true;
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  drag();
-                }}
-                delayLongPress={300}
-              >
-                <Text style={[styles.itemTitle, { color: c.text }]} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                {(section === 'week' || section === 'later') && !isActive && (
-                  <Text style={[styles.weekDateLabel, { color: c.secondaryText }]}>
-                    {formatDisplayDate(date)}
-                  </Text>
+              <View style={styles.itemExpandBlock}>
+                <Pressable
+                  style={styles.itemRowContent}
+                  onPress={() => {
+                    const idx = allEntriesRef.current.findIndex((e) => e.item.id === item.id);
+                    setDetailIndex(idx >= 0 ? idx : 0);
+                  }}
+                  onLongPress={() => {
+                    isDragging.current = true;
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    drag();
+                  }}
+                  delayLongPress={300}
+                >
+                  <View style={styles.itemTitleBlock}>
+                    <Text style={[styles.itemTitle, { color: c.text }]} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    {!isActive && !expanded && hasSubtasks && (
+                      <View style={styles.subtaskPill}>
+                        <Ionicons name="list-outline" size={11} color={c.secondaryText} />
+                        <Text style={[styles.subtaskPillText, { color: c.secondaryText }]}>
+                          {subtasks.length}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  {(section === 'week' || section === 'later') && !isActive && (
+                    <Text style={[styles.weekDateLabel, { color: c.secondaryText }]}>
+                      {formatDisplayDate(date)}
+                    </Text>
+                  )}
+                  {isActive && (
+                    <Ionicons
+                      name="reorder-three-outline"
+                      size={20}
+                      color={c.secondaryText}
+                      style={{ opacity: 0.4 }}
+                    />
+                  )}
+                  {!isActive && hasSubtasks && (
+                    <Pressable
+                      hitSlop={8}
+                      onPress={() => {
+                        setExpandedSubtaskIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(item.id)) next.delete(item.id);
+                          else next.add(item.id);
+                          return next;
+                        });
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }}
+                      style={styles.subtaskExpandBtn}
+                    >
+                      <Ionicons
+                        name={expanded ? 'remove' : 'add'}
+                        size={16}
+                        color={c.tint}
+                      />
+                    </Pressable>
+                  )}
+                </Pressable>
+                {expanded && hasSubtasks && (
+                  <View style={styles.inlineSubtaskList}>
+                    {subtasks.map((subtask) => {
+                      const subtaskDone = subtask.completedDates.includes(dateStr);
+                      return (
+                        <Pressable
+                          key={subtask.id}
+                          style={styles.inlineSubtaskRow}
+                          onPress={() => {
+                            const alreadyDone = subtask.completedDates.includes(dateStr);
+                            const newSubtask: Subtask = {
+                              ...subtask,
+                              completedDates: alreadyDone
+                                ? subtask.completedDates.filter((d) => d !== dateStr)
+                                : [...subtask.completedDates, dateStr],
+                            };
+                            const newSubtasks = subtasks.map((s) => s.id === subtask.id ? newSubtask : s);
+                            const updatedItem = { ...item, subtasks: newSubtasks };
+                            const patchList = (prev: DragItem[]) => prev.map((e) => e.item.id === item.id ? { ...e, item: updatedItem } : e);
+                            isSubtaskUpdate.current = true;
+                            setYesterdayDragItems(patchList);
+                            setWeekDragItems(patchList);
+                            setEarlierDragItems(patchList);
+                            updateItemRef.current(updatedItem);
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          }}
+                        >
+                          <View style={[
+                            styles.inlineSubtaskCheckbox,
+                            subtaskDone
+                              ? { backgroundColor: c.tint, borderColor: c.tint }
+                              : { backgroundColor: 'transparent', borderColor: c.secondaryText },
+                          ]}>
+                            {subtaskDone && <Ionicons name="checkmark" size={10} color="#fff" />}
+                          </View>
+                          <Text style={[
+                            styles.inlineSubtaskTitle,
+                            { color: subtaskDone ? c.secondaryText : c.text },
+                            subtaskDone && { textDecorationLine: 'line-through' },
+                          ]}>
+                            {subtask.title}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
                 )}
-                {isActive && (
-                  <Ionicons
-                    name="reorder-three-outline"
-                    size={20}
-                    color={c.secondaryText}
-                    style={{ opacity: 0.4 }}
-                  />
-                )}
-              </Pressable>
+              </View>
             </View>
           </Swipeable>
         </ScaleDecorator>
       );
     },
-    [isCompleted, toggleCompletion]
+    [isCompleted, toggleCompletion, expandedSubtaskIds]
   );
 
   const hasAnything =
@@ -1617,6 +2128,7 @@ function OverdueTab() {
           onReschedule={(item, newDate) => {
             updateItem({ ...item, recurrence: 'once', startDate: formatDate(newDate) });
           }}
+          onUpdateItem={updateItem}
         />
       )}
       <ScrollView style={styles.tabContent} contentContainerStyle={styles.listContent}>
@@ -1821,7 +2333,6 @@ const styles = StyleSheet.create({
   },
   itemTitle: {
     fontSize: Layout.fontSize.body,
-    flex: 1,
   },
   dateRow: {
     flexDirection: 'row',
@@ -1875,6 +2386,53 @@ const styles = StyleSheet.create({
   weekDateLabel: {
     fontSize: Layout.fontSize.caption,
     fontWeight: '500',
+  },
+  itemTitleBlock: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  subtaskPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 2,
+  },
+  subtaskPillText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  itemExpandBlock: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  subtaskExpandBtn: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inlineSubtaskList: {
+    marginTop: Layout.spacing.sm,
+    gap: Layout.spacing.xs,
+  },
+  inlineSubtaskRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.sm,
+    paddingVertical: 3,
+  },
+  inlineSubtaskCheckbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  inlineSubtaskTitle: {
+    fontSize: Layout.fontSize.caption,
+    flex: 1,
   },
   quickAddRow: {
     flexDirection: 'row',
