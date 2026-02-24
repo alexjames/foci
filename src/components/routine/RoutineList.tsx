@@ -45,7 +45,7 @@ function SwipeableRoutineCard({
 
   const handleSwipeOpen = useCallback(
     (direction: 'left' | 'right') => {
-      if (direction === 'left') {
+      if (direction === 'right') {
         swipeableRef.current?.close();
         onDelete(routine.id, routine.title);
       }

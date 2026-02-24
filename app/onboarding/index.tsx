@@ -22,9 +22,9 @@ export default function OnboardingWelcome() {
             Focus on what matters
           </Text>
           <Text style={[styles.description, { color: colors.secondaryText }]}>
-            Build your personal toolkit for intentional living. Add tools like
-            goal tracking, memento mori, affirmations, and breathing exercises
-            to your home screen.
+            Your personal toolkit for intentional living. Use tools like
+            checklists, goal tracking, memento mori, affirmations, and breathing exercises
+            to maximize your focus and achieve your goals.
           </Text>
         </View>
         <View style={styles.footer}>

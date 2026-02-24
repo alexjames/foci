@@ -51,7 +51,6 @@ import { FocusTimerSession } from '@/src/components/focus-timer/FocusTimerSessio
 // Affirmation imports
 import { AffirmationsList } from '@/src/components/affirmations/AffirmationsList';
 import { AffirmationsPlayerView } from '@/src/components/affirmations/AffirmationsPlayerView';
-import { AFFIRMATION_CATEGORIES } from '@/src/constants/affirmations';
 
 // Deadline Tracker imports
 import { DeadlineTrackerList, SortMode } from '@/src/components/deadline-tracker/DeadlineTrackerList';
@@ -294,12 +293,7 @@ function GoalsView() {
 
 function AffirmationsView({ playing, onPlay, onClosePlayer }: { playing: boolean; onPlay: () => void; onClosePlayer: () => void }) {
   const { config } = useToolConfig<AffirmationsConfig>('affirmations');
-  const selectedCategories = config?.selectedCategories ?? [];
-  const customItems = (config?.affirmations ?? []).map((a) => a.text);
-  const categoryItems = AFFIRMATION_CATEGORIES
-    .filter((cat) => selectedCategories.includes(cat.id))
-    .flatMap((cat) => cat.items);
-  const allItems = [...categoryItems, ...customItems];
+  const allItems = (config?.affirmations ?? []).map((a) => a.text);
 
   if (playing) {
     return <AffirmationsPlayerView items={allItems} />;

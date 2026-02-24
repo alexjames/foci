@@ -76,6 +76,8 @@ export default function EditRoutineScreen() {
         style: 'destructive',
         onPress: () => {
           setConfig({ ...config, routines: config.routines.filter((r) => r.id !== existingRoutine.id) });
+          // Pop back past routine-detail to the routines list
+          router.back();
           router.back();
         },
       },
