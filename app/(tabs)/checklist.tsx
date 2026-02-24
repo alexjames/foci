@@ -526,6 +526,13 @@ function TaskDetailModal({
             {formatDisplayDate(current.date)}
           </Text>
 
+          {(done || allSubtasksDone) && (
+            <View style={detailStyles.completedBadge}>
+              <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+              <Text style={detailStyles.completedBadgeText}>Completed</Text>
+            </View>
+          )}
+
           <View style={detailStyles.rescheduleRow}>
             <Pressable
               style={[detailStyles.rescheduleBtn, { borderColor: colors.cardBorder }]}
@@ -658,12 +665,6 @@ function TaskDetailModal({
             </Pressable>
           )}
 
-          {(done || allSubtasksDone) && (
-            <View style={detailStyles.completedBadge}>
-              <Ionicons name="checkmark-circle" size={16} color="#34C759" />
-              <Text style={detailStyles.completedBadgeText}>Completed</Text>
-            </View>
-          )}
         </View>
 
         {/* Actions */}
@@ -1020,6 +1021,11 @@ function TodayTab() {
     ...todayPendingFiltered.map((item) => ({ item, date: today })),
   ], [todayPendingFiltered, today]);
 
+  const allEntries = useMemo<DetailEntry[]>(() => [
+    ...todayPendingFiltered.map((item) => ({ item, date: today })),
+    ...todayCompletedWithPending.map((item) => ({ item, date: today })),
+  ], [todayPendingFiltered, todayCompletedWithPending, today]);
+
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
 
   const handleFocusComplete = useCallback(
@@ -1042,11 +1048,13 @@ function TodayTab() {
   const deleteItemRef = useRef(deleteItem);
   const updateItemRef = useRef(updateItem);
   const allPendingEntriesRef = useRef(allPendingEntries);
+  const allEntriesRef = useRef(allEntries);
   handleToggleRef.current = handleToggle;
   colorsRef.current = colors;
   deleteItemRef.current = deleteItem;
   updateItemRef.current = updateItem;
   allPendingEntriesRef.current = allPendingEntries;
+  allEntriesRef.current = allEntries;
 
   const [expandedSubtaskIds, setExpandedSubtaskIds] = useState<Set<string>>(new Set());
   const expandedSubtaskIdsRef = useRef(expandedSubtaskIds);
@@ -1107,7 +1115,7 @@ function TodayTab() {
                 <Pressable
                   style={styles.itemRowContent}
                   onPress={() => {
-                    const idx = allPendingEntriesRef.current.findIndex((e) => e.item.id === item.id);
+                    const idx = allEntriesRef.current.findIndex((e) => e.item.id === item.id);
                     setDetailIndex(idx >= 0 ? idx : 0);
                   }}
                   onLongPress={() => {
@@ -1163,7 +1171,7 @@ function TodayTab() {
                       <Ionicons
                         name={expanded ? 'remove' : 'add'}
                         size={16}
-                        color={colors.tint}
+                        color={colors.secondaryText}
                       />
                     </Pressable>
                   )}
@@ -1230,9 +1238,9 @@ function TodayTab() {
 
   return (
     <>
-      {detailIndex !== null && allPendingEntries.length > 0 && (
+      {detailIndex !== null && allEntries.length > 0 && (
         <TaskDetailModal
-          entries={allPendingEntries}
+          entries={allEntries}
           initialIndex={detailIndex}
           onClose={() => setDetailIndex(null)}
           onToggle={handleToggle}
@@ -1328,24 +1336,34 @@ function TodayTab() {
           {allCompleted.length > 0 && (
             <CollapsibleSection title="Completed" count={allCompleted.length} defaultOpen={false}>
               {allCompleted.map(({ item, date }) => (
-                <Pressable
+                <View
                   key={`${item.id}-${formatDate(date)}`}
                   style={[styles.itemRow, { backgroundColor: colors.cardBackground }]}
-                  onPress={() => handleToggle(item, date)}
-                  onLongPress={() => router.push(`/edit-checklist/${item.id}` as any)}
                 >
-                  <View style={[styles.circleCheckbox, { backgroundColor: colors.tint, borderColor: colors.tint }]}>
-                    <Ionicons name="checkmark" size={14} color="#fff" />
-                  </View>
-                  <Text
-                    style={[
-                      styles.itemTitle,
-                      { color: colors.secondaryText, textDecorationLine: 'line-through' },
-                    ]}
+                  <Pressable
+                    onPress={() => handleToggle(item, date)}
+                    hitSlop={8}
+                    style={[styles.circleCheckbox, { backgroundColor: colors.tint, borderColor: colors.tint }]}
                   >
-                    {item.title}
-                  </Text>
-                </Pressable>
+                    <Ionicons name="checkmark" size={14} color="#fff" />
+                  </Pressable>
+                  <Pressable
+                    style={styles.itemRowContent}
+                    onPress={() => {
+                      const idx = allEntriesRef.current.findIndex((e) => e.item.id === item.id);
+                      setDetailIndex(idx >= 0 ? idx : 0);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.itemTitle,
+                        { color: colors.secondaryText, textDecorationLine: 'line-through' },
+                      ]}
+                    >
+                      {item.title}
+                    </Text>
+                  </Pressable>
+                </View>
               ))}
             </CollapsibleSection>
           )}
@@ -1462,14 +1480,15 @@ function UpcomingTab() {
     [laterDragItems, isCompleted]
   );
 
-  // Flat ordered list of all pending upcoming entries for detail modal navigation
+  // Flat ordered list of all entries (pending + completed) for detail modal navigation
   const allEntries = useMemo<DetailEntry[]>(
     () => [
       ...tomorrowPendingItems.map((d) => ({ item: d.item, date: d.date })),
       ...weekPendingItems.map((d) => ({ item: d.item, date: d.date })),
       ...laterPendingItems.map((d) => ({ item: d.item, date: d.date })),
+      ...completedEntries,
     ],
-    [tomorrowPendingItems, weekPendingItems, laterPendingItems]
+    [tomorrowPendingItems, weekPendingItems, laterPendingItems, completedEntries]
   );
   const allEntriesRef = useRef(allEntries);
   allEntriesRef.current = allEntries;
@@ -1605,7 +1624,7 @@ function UpcomingTab() {
                       <Ionicons
                         name={expanded ? 'remove' : 'add'}
                         size={16}
-                        color={c.tint}
+                        color={c.secondaryText}
                       />
                     </Pressable>
                   )}
@@ -1751,19 +1770,29 @@ function UpcomingTab() {
         {completedEntries.length > 0 && (
           <CollapsibleSection title="Completed" count={completedEntries.length} defaultOpen={false}>
             {completedEntries.map(({ item, date }) => (
-              <Pressable
+              <View
                 key={`${item.id}-${formatDate(date)}`}
                 style={[styles.itemRow, { backgroundColor: colors.cardBackground }]}
-                onPress={() => { toggleCompletion(item.id, date); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                onLongPress={() => router.push(`/edit-checklist/${item.id}` as any)}
               >
-                <View style={[styles.circleCheckbox, { backgroundColor: colors.tint, borderColor: colors.tint }]}>
+                <Pressable
+                  onPress={() => { toggleCompletion(item.id, date); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                  hitSlop={8}
+                  style={[styles.circleCheckbox, { backgroundColor: colors.tint, borderColor: colors.tint }]}
+                >
                   <Ionicons name="checkmark" size={14} color="#fff" />
-                </View>
-                <Text style={[styles.itemTitle, { color: colors.secondaryText, textDecorationLine: 'line-through' }]}>
-                  {item.title}
-                </Text>
-              </Pressable>
+                </Pressable>
+                <Pressable
+                  style={styles.itemRowContent}
+                  onPress={() => {
+                    const idx = allEntriesRef.current.findIndex((e) => e.item.id === item.id && formatDate(e.date) === formatDate(date));
+                    setDetailIndex(idx >= 0 ? idx : 0);
+                  }}
+                >
+                  <Text style={[styles.itemTitle, { color: colors.secondaryText, textDecorationLine: 'line-through' }]}>
+                    {item.title}
+                  </Text>
+                </Pressable>
+              </View>
             ))}
           </CollapsibleSection>
         )}
@@ -1876,14 +1905,15 @@ function OverdueTab() {
     [earlierDragItems, isCompleted]
   );
 
-  // Flat list for detail modal navigation (pending only)
+  // Flat list for detail modal navigation (pending + completed)
   const allEntries = useMemo<DetailEntry[]>(
     () => [
       ...yesterdayPendingItems.map((d) => ({ item: d.item, date: d.date })),
       ...weekPendingItems.map((d) => ({ item: d.item, date: d.date })),
       ...earlierPendingItems.map((d) => ({ item: d.item, date: d.date })),
+      ...overdueCompletedEntries,
     ],
-    [yesterdayPendingItems, weekPendingItems, earlierPendingItems]
+    [yesterdayPendingItems, weekPendingItems, earlierPendingItems, overdueCompletedEntries]
   );
   const allEntriesRef = useRef(allEntries);
   allEntriesRef.current = allEntries;
@@ -2019,7 +2049,7 @@ function OverdueTab() {
                       <Ionicons
                         name={expanded ? 'remove' : 'add'}
                         size={16}
-                        color={c.tint}
+                        color={c.secondaryText}
                       />
                     </Pressable>
                   )}
@@ -2165,19 +2195,29 @@ function OverdueTab() {
         {overdueCompletedEntries.length > 0 && (
           <CollapsibleSection title="Completed" count={overdueCompletedEntries.length} defaultOpen={false}>
             {overdueCompletedEntries.map(({ item, date }) => (
-              <Pressable
+              <View
                 key={`${item.id}-${formatDate(date)}`}
                 style={[styles.itemRow, { backgroundColor: colors.cardBackground }]}
-                onPress={() => { toggleCompletion(item.id, date); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                onLongPress={() => router.push(`/edit-checklist/${item.id}` as any)}
               >
-                <View style={[styles.circleCheckbox, { backgroundColor: colors.tint, borderColor: colors.tint }]}>
+                <Pressable
+                  onPress={() => { toggleCompletion(item.id, date); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                  hitSlop={8}
+                  style={[styles.circleCheckbox, { backgroundColor: colors.tint, borderColor: colors.tint }]}
+                >
                   <Ionicons name="checkmark" size={14} color="#fff" />
-                </View>
-                <Text style={[styles.itemTitle, { color: colors.secondaryText, textDecorationLine: 'line-through' }]}>
-                  {item.title}
-                </Text>
-              </Pressable>
+                </Pressable>
+                <Pressable
+                  style={styles.itemRowContent}
+                  onPress={() => {
+                    const idx = allEntriesRef.current.findIndex((e) => e.item.id === item.id && formatDate(e.date) === formatDate(date));
+                    setDetailIndex(idx >= 0 ? idx : 0);
+                  }}
+                >
+                  <Text style={[styles.itemTitle, { color: colors.secondaryText, textDecorationLine: 'line-through' }]}>
+                    {item.title}
+                  </Text>
+                </Pressable>
+              </View>
             ))}
           </CollapsibleSection>
         )}
