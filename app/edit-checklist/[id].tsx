@@ -56,7 +56,7 @@ export default function EditChecklistScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
-  const { items, addItem, updateItem, deleteItem } = useChecklist();
+  const { items, addItem, updateItem, deleteItem, moveToTrash } = useChecklist();
 
   const isTemplate = kindParam === 'template';
 
@@ -237,7 +237,11 @@ export default function EditChecklistScreen() {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          deleteItem(existingItem.id);
+          if (isEditingTemplate) {
+            deleteItem(existingItem.id);
+          } else {
+            moveToTrash(existingItem.id, formatDate(new Date()));
+          }
           router.back();
         },
       },

@@ -897,7 +897,7 @@ function TodayTab() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
-  const { getItemsForDate, isCompleted, toggleCompletion, updateCompletion, addItem, updateItem, deleteItem, items } = useChecklist();
+  const { getItemsForDate, isCompleted, toggleCompletion, updateCompletion, addItem, updateItem, moveToTrash, items } = useChecklist();
   const today = useMemo(() => startOfDay(new Date()), []);
   // Today's items split into pending / completed
   const todayItems = useMemo(() => getItemsForDate(today), [today, getItemsForDate, items]);
@@ -1046,13 +1046,13 @@ function TodayTab() {
   // Refs for stable render callback
   const handleToggleRef = useRef(handleToggle);
   const colorsRef = useRef(colors);
-  const deleteItemRef = useRef(deleteItem);
+  const moveToTrashRef = useRef(moveToTrash);
   const updateItemRef = useRef(updateItem);
   const allPendingEntriesRef = useRef(allPendingEntries);
   const allEntriesRef = useRef(allEntries);
   handleToggleRef.current = handleToggle;
   colorsRef.current = colors;
-  deleteItemRef.current = deleteItem;
+  moveToTrashRef.current = moveToTrash;
   updateItemRef.current = updateItem;
   allPendingEntriesRef.current = allPendingEntries;
   allEntriesRef.current = allEntries;
@@ -1089,7 +1089,7 @@ function TodayTab() {
             onSwipeableOpen={(direction: 'left' | 'right') => {
               if (direction === 'left') {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                deleteItemRef.current(item.id);
+                moveToTrashRef.current(item.id, formatDate(new Date()));
               }
             }}
             overshootRight={false}
@@ -1258,7 +1258,7 @@ function TodayTab() {
                 text: 'Delete',
                 style: 'destructive',
                 onPress: () => {
-                  deleteItem(item.id);
+                  moveToTrash(item.id, formatDate(new Date()));
                   afterDelete();
                 },
               },
@@ -1382,7 +1382,7 @@ function UpcomingTab() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
-  const { getItemsForDate, isCompleted, toggleCompletion, updateCompletion, updateItem, deleteItem, items } = useChecklist();
+  const { getItemsForDate, isCompleted, toggleCompletion, updateCompletion, updateItem, moveToTrash, items } = useChecklist();
   // router used in onEdit inside TaskDetailModal
 
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -1505,10 +1505,10 @@ function UpcomingTab() {
     [toggleCompletion, updateCompletion]
   );
 
-  const deleteItemRef = useRef(deleteItem);
+  const moveToTrashRef = useRef(moveToTrash);
   const colorsRef = useRef(colors);
   const updateItemRef = useRef(updateItem);
-  deleteItemRef.current = deleteItem;
+  moveToTrashRef.current = moveToTrash;
   colorsRef.current = colors;
   updateItemRef.current = updateItem;
 
@@ -1536,7 +1536,7 @@ function UpcomingTab() {
             onSwipeableOpen={(direction: 'left' | 'right') => {
               if (direction === 'left') {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                deleteItemRef.current(item.id);
+                moveToTrashRef.current(item.id, formatDate(new Date()));
               }
             }}
             overshootRight={false}
@@ -1725,7 +1725,7 @@ function UpcomingTab() {
                 text: 'Delete',
                 style: 'destructive',
                 onPress: () => {
-                  deleteItem(item.id);
+                  moveToTrash(item.id, formatDate(new Date()));
                   afterDelete();
                 },
               },
@@ -1808,7 +1808,7 @@ function OverdueTab() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
-  const { getItemsForDate, isCompleted, toggleCompletion, updateCompletion, updateItem, deleteItem, items } = useChecklist();
+  const { getItemsForDate, isCompleted, toggleCompletion, updateCompletion, updateItem, moveToTrash, items } = useChecklist();
 
   const today = useMemo(() => startOfDay(new Date()), []);
 
@@ -1930,10 +1930,10 @@ function OverdueTab() {
     [toggleCompletion, updateCompletion]
   );
 
-  const deleteItemRef = useRef(deleteItem);
+  const moveToTrashRef = useRef(moveToTrash);
   const colorsRef = useRef(colors);
   const updateItemRef = useRef(updateItem);
-  deleteItemRef.current = deleteItem;
+  moveToTrashRef.current = moveToTrash;
   colorsRef.current = colors;
   updateItemRef.current = updateItem;
 
@@ -1961,7 +1961,7 @@ function OverdueTab() {
             onSwipeableOpen={(direction: 'left' | 'right') => {
               if (direction === 'left') {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                deleteItemRef.current(item.id);
+                moveToTrashRef.current(item.id, formatDate(new Date()));
               }
             }}
             overshootRight={false}
@@ -2150,7 +2150,7 @@ function OverdueTab() {
                 text: 'Delete',
                 style: 'destructive',
                 onPress: () => {
-                  deleteItem(item.id);
+                  moveToTrash(item.id, formatDate(new Date()));
                   afterDelete();
                 },
               },
