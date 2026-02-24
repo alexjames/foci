@@ -197,6 +197,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
+        const loadedItems: import('../types').ChecklistItem[] = checklistItemsJson
+          ? JSON.parse(checklistItemsJson)
+          : [];
+        const loadedCompletions: import('../types').ChecklistCompletion[] = checklistCompletionsJson
+          ? JSON.parse(checklistCompletionsJson)
+          : [];
+
+        // Prune completions for one-time items whose date has already passed.
+        // Recurring items keep their completions (needed for history / streak display).
+        const todayStr = (() => {
+          const d = new Date();
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${y}-${m}-${day}`;
+        })();
+        const onceItemIds = new Set(
+          loadedItems.filter((i) => i.recurrence === 'once').map((i) => i.id)
+        );
+        const prunedCompletions = loadedCompletions.filter((c) => {
+          if (onceItemIds.has(c.itemId) && c.date < todayStr) return false;
+          return true;
+        });
+
         dispatch({
           type: 'LOAD_STATE',
           payload: {
@@ -204,12 +228,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             settings,
             toolConfigs: migrated.toolConfigs,
             homeTools: seededHomeTools,
-            checklistItems: checklistItemsJson
-              ? JSON.parse(checklistItemsJson)
-              : [],
-            checklistCompletions: checklistCompletionsJson
-              ? JSON.parse(checklistCompletionsJson)
-              : [],
+            checklistItems: loadedItems,
+            checklistCompletions: prunedCompletions,
           },
         });
       } catch (e) {
