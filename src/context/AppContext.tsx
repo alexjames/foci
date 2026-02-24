@@ -144,6 +144,55 @@ function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
 
+    case 'MOVE_TO_TRASH':
+      return {
+        ...state,
+        checklistItems: state.checklistItems.map((item) =>
+          item.id === action.payload.itemId
+            ? { ...item, trashedAt: action.payload.trashedAt }
+            : item
+        ),
+      };
+
+    case 'RESTORE_FROM_TRASH':
+      return {
+        ...state,
+        checklistItems: state.checklistItems.map((item) =>
+          item.id === action.payload
+            ? { ...item, trashedAt: undefined }
+            : item
+        ),
+        // Remove completions so it appears pending again
+        checklistCompletions: state.checklistCompletions.filter(
+          (c) => c.itemId !== action.payload
+        ),
+      };
+
+    case 'DELETE_TRASH_ITEM':
+      return {
+        ...state,
+        checklistItems: state.checklistItems.filter((item) => item.id !== action.payload),
+        checklistCompletions: state.checklistCompletions.filter((c) => c.itemId !== action.payload),
+      };
+
+    case 'PRUNE_TRASH': {
+      const todayStr = action.payload;
+      const cutoff = (() => {
+        const d = new Date(todayStr);
+        d.setDate(d.getDate() - 7);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      })();
+      const pruned = state.checklistItems.filter(
+        (item) => !(item.trashedAt && item.trashedAt <= cutoff)
+      );
+      const keptIds = new Set(pruned.map((i) => i.id));
+      return {
+        ...state,
+        checklistItems: pruned,
+        checklistCompletions: state.checklistCompletions.filter((c) => keptIds.has(c.itemId)),
+      };
+    }
+
     default:
       return state;
   }
@@ -204,8 +253,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ? JSON.parse(checklistCompletionsJson)
           : [];
 
-        // Prune completions for one-time items whose date has already passed.
-        // Recurring items keep their completions (needed for history / streak display).
         const todayStr = (() => {
           const d = new Date();
           const y = d.getFullYear();
@@ -213,13 +260,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const day = String(d.getDate()).padStart(2, '0');
           return `${y}-${m}-${day}`;
         })();
-        const onceItemIds = new Set(
-          loadedItems.filter((i) => i.recurrence === 'once').map((i) => i.id)
-        );
-        const prunedCompletions = loadedCompletions.filter((c) => {
-          if (onceItemIds.has(c.itemId) && c.date < todayStr) return false;
-          return true;
+
+        // Move once-tasks completed before today into trash (end-of-day trash logic).
+        // Recurring tasks keep completions for history.
+        const completionsByItem = new Map<string, string>(); // itemId -> earliest completion date
+        for (const c of loadedCompletions) {
+          const existing = completionsByItem.get(c.itemId);
+          if (!existing || c.date < existing) completionsByItem.set(c.itemId, c.date);
+        }
+        const trashedItems = loadedItems.map((item) => {
+          if (item.trashedAt) return item; // already trashed
+          if (item.kind === 'template') return item;
+          if (item.recurrence !== 'once') return item;
+          const completedDate = completionsByItem.get(item.id);
+          if (completedDate && completedDate < todayStr) {
+            return { ...item, trashedAt: completedDate };
+          }
+          return item;
         });
+
+        // Prune completions for once-items now in trash (they're tracked by trashedAt)
+        const trashedIds = new Set(trashedItems.filter((i) => i.trashedAt).map((i) => i.id));
+        const prunedCompletions = loadedCompletions.filter((c) => !trashedIds.has(c.itemId));
+
+        // Prune trash items older than 7 days
+        const cutoff = (() => {
+          const d = new Date(todayStr);
+          d.setDate(d.getDate() - 7);
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        })();
+        const finalItems = trashedItems.filter(
+          (item) => !(item.trashedAt && item.trashedAt <= cutoff)
+        );
+        const keptIds = new Set(finalItems.map((i) => i.id));
+        const finalCompletions = prunedCompletions.filter((c) => keptIds.has(c.itemId));
 
         dispatch({
           type: 'LOAD_STATE',
@@ -228,8 +302,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             settings,
             toolConfigs: migrated.toolConfigs,
             homeTools: seededHomeTools,
-            checklistItems: loadedItems,
-            checklistCompletions: prunedCompletions,
+            checklistItems: finalItems,
+            checklistCompletions: finalCompletions,
           },
         });
       } catch (e) {

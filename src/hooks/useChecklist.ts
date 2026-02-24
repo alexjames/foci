@@ -87,7 +87,9 @@ export function useChecklist() {
 
   const getItemsForDate = useCallback(
     (date: Date) => {
-      return state.checklistItems.filter((item) => isDueOnDate(item, date));
+      return state.checklistItems.filter(
+        (item) => item.kind !== 'template' && !item.trashedAt && isDueOnDate(item, date)
+      );
     },
     [state.checklistItems]
   );
@@ -109,6 +111,27 @@ export function useChecklist() {
     [dispatch]
   );
 
+  const moveToTrash = useCallback(
+    (itemId: string, trashedAt: string) => {
+      dispatch({ type: 'MOVE_TO_TRASH', payload: { itemId, trashedAt } });
+    },
+    [dispatch]
+  );
+
+  const restoreFromTrash = useCallback(
+    (itemId: string) => {
+      dispatch({ type: 'RESTORE_FROM_TRASH', payload: itemId });
+    },
+    [dispatch]
+  );
+
+  const deleteTrashItem = useCallback(
+    (itemId: string) => {
+      dispatch({ type: 'DELETE_TRASH_ITEM', payload: itemId });
+    },
+    [dispatch]
+  );
+
   return {
     items: state.checklistItems,
     completions: state.checklistCompletions,
@@ -117,6 +140,9 @@ export function useChecklist() {
     deleteItem,
     toggleCompletion,
     updateCompletion,
+    moveToTrash,
+    restoreFromTrash,
+    deleteTrashItem,
     getItemsForDate,
     isCompleted,
   };

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import { useColorScheme } from '@/components/useColorScheme';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
@@ -2226,9 +2227,320 @@ function OverdueTab() {
   );
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function recurrenceLabel(item: ChecklistItem): string {
+  switch (item.recurrence) {
+    case 'daily': return 'Daily';
+    case 'weekdays': return 'Weekdays';
+    case 'weekends': return 'Weekends';
+    case 'specific-days': {
+      const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      return (item.specificDays ?? []).map((d) => names[d]).join(', ') || 'Specific days';
+    }
+    case 'every-n-days':
+      return `Every ${item.everyNDays ?? '?'} days`;
+    default:
+      return '';
+  }
+}
+
+function timeAgoLabel(trashedAt: string): string {
+  const trashed = new Date(trashedAt);
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - trashed.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return '1 day ago';
+  return `${diffDays} days ago`;
+}
+
+// ─── Recurring View ───────────────────────────────────────────────────────────
+
+function RecurringView() {
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+  const router = useRouter();
+  const { items, deleteItem } = useChecklist();
+
+  const recurringItems = useMemo(
+    () => items.filter((i) => i.recurrence !== 'once' && !i.trashedAt && i.kind !== 'template'),
+    [items]
+  );
+
+  if (recurringItems.length === 0) {
+    return (
+      <View style={[styles.tabContent, styles.emptyState]}>
+        <Ionicons name="repeat-outline" size={48} color={colors.secondaryText} />
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>No recurring tasks</Text>
+        <Text style={[styles.emptyMessage, { color: colors.secondaryText }]}>
+          Tap + to create a repeating task
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.tabContent} contentContainerStyle={styles.listContent}>
+      {recurringItems.map((item) => (
+        <Swipeable
+          key={item.id}
+          renderRightActions={() => (
+            <View style={styles.swipeDeleteAction}>
+              <Ionicons name="trash-outline" size={22} color="#fff" />
+              <Text style={styles.swipeDeleteText}>Delete</Text>
+            </View>
+          )}
+          onSwipeableOpen={(direction: 'left' | 'right') => {
+            if (direction === 'left') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              Alert.alert('Delete Recurring Task', `Delete "${item.title}"?`, [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: () => deleteItem(item.id) },
+              ]);
+            }
+          }}
+          overshootRight={false}
+        >
+          <Pressable
+            style={[styles.itemRow, { backgroundColor: colors.cardBackground }]}
+            onPress={() => router.push(`/edit-checklist/${item.id}` as any)}
+          >
+            <Ionicons name="repeat-outline" size={18} color={colors.secondaryText} />
+            <View style={styles.itemExpandBlock}>
+              <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text style={[viewStyles.recurLabel, { color: colors.secondaryText }]}>
+                {recurrenceLabel(item)}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.secondaryText} />
+          </Pressable>
+        </Swipeable>
+      ))}
+    </ScrollView>
+  );
+}
+
+// ─── Templates View ───────────────────────────────────────────────────────────
+
+function TemplatesView() {
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+  const router = useRouter();
+  const { items, deleteItem } = useChecklist();
+
+  const templateItems = useMemo(
+    () => items.filter((i) => i.kind === 'template'),
+    [items]
+  );
+
+  if (templateItems.length === 0) {
+    return (
+      <View style={[styles.tabContent, styles.emptyState]}>
+        <Ionicons name="copy-outline" size={48} color={colors.secondaryText} />
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>No templates</Text>
+        <Text style={[styles.emptyMessage, { color: colors.secondaryText }]}>
+          Tap + to create a reusable task template
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.tabContent} contentContainerStyle={styles.listContent}>
+      {templateItems.map((item) => (
+        <Swipeable
+          key={item.id}
+          renderRightActions={() => (
+            <View style={styles.swipeDeleteAction}>
+              <Ionicons name="trash-outline" size={22} color="#fff" />
+              <Text style={styles.swipeDeleteText}>Delete</Text>
+            </View>
+          )}
+          onSwipeableOpen={(direction: 'left' | 'right') => {
+            if (direction === 'left') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              Alert.alert('Delete Template', `Delete "${item.title}"?`, [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: () => deleteItem(item.id) },
+              ]);
+            }
+          }}
+          overshootRight={false}
+        >
+          <View style={[styles.itemRow, { backgroundColor: colors.cardBackground }]}>
+            <Ionicons name="copy-outline" size={18} color={colors.secondaryText} />
+            <View style={styles.itemExpandBlock}>
+              <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
+                {item.title}
+              </Text>
+              {(item.subtasks?.length ?? 0) > 0 && (
+                <Text style={[viewStyles.recurLabel, { color: colors.secondaryText }]}>
+                  {item.subtasks!.length} subtask{item.subtasks!.length !== 1 ? 's' : ''}
+                </Text>
+              )}
+            </View>
+            <View style={viewStyles.templateActions}>
+              <Pressable
+                hitSlop={8}
+                style={[viewStyles.templateBtn, { borderColor: colors.tint }]}
+                onPress={() => router.push(`/edit-checklist/new?templateId=${item.id}` as any)}
+              >
+                <Text style={[viewStyles.templateBtnText, { color: colors.tint }]}>Use</Text>
+              </Pressable>
+              <Pressable
+                hitSlop={8}
+                onPress={() => router.push(`/edit-checklist/${item.id}?kind=template` as any)}
+              >
+                <Ionicons name="pencil-outline" size={18} color={colors.secondaryText} />
+              </Pressable>
+            </View>
+          </View>
+        </Swipeable>
+      ))}
+    </ScrollView>
+  );
+}
+
+// ─── Trash View ───────────────────────────────────────────────────────────────
+
+function TrashView() {
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+  const { items, restoreFromTrash, deleteTrashItem } = useChecklist();
+
+  const trashItems = useMemo(
+    () => items.filter((i) => i.trashedAt).sort((a, b) => (b.trashedAt! > a.trashedAt! ? 1 : -1)),
+    [items]
+  );
+
+  const handleEmptyTrash = () => {
+    Alert.alert('Empty Trash', 'Permanently delete all trashed items?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Empty Trash',
+        style: 'destructive',
+        onPress: () => { trashItems.forEach((i) => deleteTrashItem(i.id)); },
+      },
+    ]);
+  };
+
+  if (trashItems.length === 0) {
+    return (
+      <View style={[styles.tabContent, styles.emptyState]}>
+        <Ionicons name="trash-outline" size={48} color={colors.secondaryText} />
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>Trash is empty</Text>
+        <Text style={[styles.emptyMessage, { color: colors.secondaryText }]}>
+          Completed one-time tasks appear here
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.tabContent} contentContainerStyle={styles.listContent}>
+      {trashItems.map((item) => (
+        <Swipeable
+          key={item.id}
+          renderLeftActions={() => (
+            <View style={viewStyles.swipeRestoreAction}>
+              <Ionicons name="arrow-undo-outline" size={22} color="#fff" />
+              <Text style={styles.swipeDeleteText}>Restore</Text>
+            </View>
+          )}
+          renderRightActions={() => (
+            <View style={styles.swipeDeleteAction}>
+              <Ionicons name="trash-outline" size={22} color="#fff" />
+              <Text style={styles.swipeDeleteText}>Delete</Text>
+            </View>
+          )}
+          onSwipeableOpen={(direction: 'left' | 'right') => {
+            if (direction === 'right') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              restoreFromTrash(item.id);
+            } else if (direction === 'left') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              deleteTrashItem(item.id);
+            }
+          }}
+          overshootLeft={false}
+          overshootRight={false}
+        >
+          <View style={[styles.itemRow, { backgroundColor: colors.cardBackground }]}>
+            <Ionicons name="checkmark-circle" size={22} color={colors.secondaryText} style={{ opacity: 0.5 }} />
+            <View style={styles.itemExpandBlock}>
+              <Text style={[styles.itemTitle, { color: colors.secondaryText, textDecorationLine: 'line-through' }]} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text style={[viewStyles.recurLabel, { color: colors.secondaryText }]}>
+                {timeAgoLabel(item.trashedAt!)}
+              </Text>
+            </View>
+          </View>
+        </Swipeable>
+      ))}
+
+      <Pressable
+        style={[viewStyles.emptyTrashBtn, { borderColor: colors.destructive }]}
+        onPress={handleEmptyTrash}
+      >
+        <Ionicons name="trash-outline" size={16} color={colors.destructive} />
+        <Text style={[viewStyles.emptyTrashText, { color: colors.destructive }]}>Empty Trash</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+const viewStyles = StyleSheet.create({
+  recurLabel: {
+    fontSize: Layout.fontSize.caption,
+    marginTop: 2,
+  },
+  templateActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.md,
+  },
+  templateBtn: {
+    borderWidth: 1,
+    borderRadius: Layout.borderRadius.sm,
+    paddingHorizontal: Layout.spacing.sm,
+    paddingVertical: 3,
+  },
+  templateBtnText: {
+    fontSize: Layout.fontSize.caption,
+    fontWeight: '600',
+  },
+  swipeRestoreAction: {
+    flex: 1,
+    backgroundColor: '#34C759',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    paddingLeft: Layout.spacing.lg,
+    borderRadius: Layout.borderRadius.md,
+    marginBottom: Layout.spacing.sm,
+  },
+  emptyTrashBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Layout.spacing.sm,
+    padding: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+    borderWidth: 1,
+    marginTop: Layout.spacing.lg,
+  },
+  emptyTrashText: {
+    fontSize: Layout.fontSize.body,
+    fontWeight: '500',
+  },
+});
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 type TabId = 'today' | 'upcoming' | 'overdue';
+type ViewId = 'tasks' | 'recurring' | 'templates' | 'trash';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'today', label: 'Today' },
@@ -2236,54 +2548,173 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'overdue', label: 'Overdue' },
 ];
 
+const MENU_ITEMS: { id: ViewId; label: string; icon: string }[] = [
+  { id: 'tasks', label: 'Tasks', icon: 'checkmark-circle-outline' },
+  { id: 'recurring', label: 'Recurring', icon: 'repeat-outline' },
+  { id: 'templates', label: 'Templates', icon: 'copy-outline' },
+  { id: 'trash', label: 'Trash', icon: 'trash-outline' },
+];
+
+
 export default function ChecklistScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
+  const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState<TabId>('today');
+  const [activeView, setActiveView] = useState<ViewId>('tasks');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <Pressable
+          hitSlop={8}
+          onPress={() => setDrawerOpen(true)}
+          style={{ marginLeft: 8, padding: 4 }}
+        >
+          <Ionicons name="menu-outline" size={24} color={colors.text} />
+        </Pressable>
+      ),
+    });
+  }, [navigation, colors.text]);
+
+  const fabAction = () => {
+    if (activeView === 'templates') {
+      router.push('/edit-checklist/new?kind=template' as any);
+    } else {
+      router.push('/edit-checklist/new' as any);
+    }
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Tab bar */}
-      <View style={[styles.tabBar, { backgroundColor: colors.background, borderBottomColor: colors.separator }]}>
-        {TABS.map((tab) => {
-          const active = activeTab === tab.id;
-          return (
-            <TouchableOpacity
-              key={tab.id}
-              style={styles.tabItem}
-              onPress={() => setActiveTab(tab.id)}
-            >
-              <Text
-                style={[
-                  styles.tabLabel,
-                  { color: active ? colors.tint : colors.secondaryText },
-                  active && styles.tabLabelActive,
-                ]}
-              >
-                {tab.label}
-              </Text>
-              {active && <View style={[styles.tabUnderline, { backgroundColor: colors.tint }]} />}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* Tab content */}
-      {activeTab === 'today' && <TodayTab />}
-      {activeTab === 'upcoming' && <UpcomingTab />}
-      {activeTab === 'overdue' && <OverdueTab />}
-
-      {/* FAB */}
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colors.tint }]}
-        onPress={() => router.push('/edit-checklist/new' as any)}
+      {/* Drawer modal */}
+      <Modal
+        visible={drawerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDrawerOpen(false)}
       >
-        <Ionicons name="add" size={28} color="#fff" />
-      </TouchableOpacity>
+        <Pressable style={navStyles.drawerOverlay} onPress={() => setDrawerOpen(false)}>
+          <Pressable
+            style={[navStyles.drawer, { backgroundColor: colors.cardBackground }]}
+            onPress={() => {}}
+          >
+            <View style={[navStyles.drawerHandle, { backgroundColor: colors.separator }]} />
+            {MENU_ITEMS.map((item) => {
+              const active = activeView === item.id;
+              return (
+                <Pressable
+                  key={item.id}
+                  style={[navStyles.drawerRow, active && { backgroundColor: colors.tint + '18' }]}
+                  onPress={() => {
+                    setActiveView(item.id);
+                    setDrawerOpen(false);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                >
+                  <Ionicons
+                    name={item.icon as any}
+                    size={22}
+                    color={active ? colors.tint : colors.secondaryText}
+                  />
+                  <Text style={[navStyles.drawerLabel, { color: active ? colors.tint : colors.text }]}>
+                    {item.label}
+                  </Text>
+                  {active && (
+                    <Ionicons name="checkmark" size={18} color={colors.tint} style={{ marginLeft: 'auto' }} />
+                  )}
+                </Pressable>
+              );
+            })}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Tasks view: sub-tab bar + tab content */}
+      {activeView === 'tasks' && (
+        <>
+          <View style={[styles.tabBar, { backgroundColor: colors.background, borderBottomColor: colors.separator }]}>
+            {TABS.map((tab) => {
+              const active = activeTab === tab.id;
+              return (
+                <TouchableOpacity
+                  key={tab.id}
+                  style={styles.tabItem}
+                  onPress={() => setActiveTab(tab.id)}
+                >
+                  <Text
+                    style={[
+                      styles.tabLabel,
+                      { color: active ? colors.tint : colors.secondaryText },
+                      active && styles.tabLabelActive,
+                    ]}
+                  >
+                    {tab.label}
+                  </Text>
+                  {active && <View style={[styles.tabUnderline, { backgroundColor: colors.tint }]} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {activeTab === 'today' && <TodayTab />}
+          {activeTab === 'upcoming' && <UpcomingTab />}
+          {activeTab === 'overdue' && <OverdueTab />}
+        </>
+      )}
+
+      {activeView === 'recurring' && <RecurringView />}
+      {activeView === 'templates' && <TemplatesView />}
+      {activeView === 'trash' && <TrashView />}
+
+      {/* FAB — hidden on trash */}
+      {activeView !== 'trash' && (
+        <TouchableOpacity
+          style={[styles.fab, { backgroundColor: colors.tint }]}
+          onPress={fabAction}
+        >
+          <Ionicons name="add" size={28} color="#fff" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
+
+const navStyles = StyleSheet.create({
+  drawerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  drawer: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 36,
+    paddingTop: Layout.spacing.sm,
+    paddingHorizontal: Layout.spacing.md,
+  },
+  drawerHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: Layout.spacing.md,
+  },
+  drawerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.md,
+    paddingVertical: Layout.spacing.md,
+    paddingHorizontal: Layout.spacing.sm,
+    borderRadius: Layout.borderRadius.md,
+    marginBottom: Layout.spacing.xs,
+  },
+  drawerLabel: {
+    fontSize: Layout.fontSize.body,
+    fontWeight: '500',
+  },
+});
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 

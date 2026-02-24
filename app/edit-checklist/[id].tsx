@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,16 +9,18 @@ import {
   Alert,
   Switch,
   useColorScheme,
-  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
-import { RecurrenceType } from '@/src/types';
+import { ChecklistItemKind, RecurrenceType, Subtask } from '@/src/types';
 import { useChecklist } from '@/src/hooks/useChecklist';
+import * as Haptics from 'expo-haptics';
 
 const RECURRENCE_OPTIONS: { value: RecurrenceType; label: string }[] = [
   { value: 'daily', label: 'Daily' },
@@ -46,21 +48,37 @@ function formatDisplayDate(d: Date): string {
 }
 
 export default function EditChecklistScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, kind: kindParam, templateId } = useLocalSearchParams<{
+    id: string;
+    kind?: string;
+    templateId?: string;
+  }>();
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const { items, addItem, updateItem, deleteItem } = useChecklist();
+
+  const isTemplate = kindParam === 'template';
 
   const existingItem = useMemo(
     () => (id !== 'new' ? items.find((i) => i.id === id) : null),
     [id, items]
   );
 
+  // If templateId is provided, pre-fill from that template
+  const templateItem = useMemo(
+    () => (templateId ? items.find((i) => i.id === templateId) : null),
+    [templateId, items]
+  );
+
+  const isEditingTemplate = existingItem?.kind === 'template' || isTemplate;
+
   // Determine if existing item repeats (anything other than 'once')
   const existingRepeats = existingItem ? existingItem.recurrence !== 'once' : false;
 
-  const [title, setTitle] = useState(existingItem?.title ?? '');
+  const [title, setTitle] = useState(
+    templateItem?.title ?? existingItem?.title ?? ''
+  );
   const [repeats, setRepeats] = useState(existingRepeats);
   const [recurrence, setRecurrence] = useState<RecurrenceType>(
     existingItem && existingItem.recurrence !== 'once'
@@ -81,11 +99,95 @@ export default function EditChecklistScreen() {
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
 
+  // Subtasks for templates
+  const [subtasks, setSubtasks] = useState<Subtask[]>(
+    existingItem?.subtasks ?? []
+  );
+  const [subtaskInput, setSubtaskInput] = useState('');
+  const subtaskInputRef = useRef<TextInput>(null);
+
+  const addSubtask = useCallback(() => {
+    const title = subtaskInput.trim();
+    if (!title) return;
+    const newSubtask: Subtask = {
+      id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      title,
+      completedDates: [],
+    };
+    setSubtasks((prev) => [...prev, newSubtask]);
+    setSubtaskInput('');
+  }, [subtaskInput]);
+
+  const renderSubtaskItem = useCallback(
+    ({ item, drag, isActive }: RenderItemParams<Subtask>) => (
+      <ScaleDecorator>
+        <Swipeable
+          renderRightActions={() => (
+            <View style={styles.subtaskDeleteAction}>
+              <Ionicons name="trash-outline" size={18} color="#fff" />
+            </View>
+          )}
+          onSwipeableOpen={(direction: 'left' | 'right') => {
+            if (direction === 'left') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setSubtasks((prev) => prev.filter((s) => s.id !== item.id));
+            }
+          }}
+          overshootRight={false}
+          enabled={!isActive}
+        >
+          <Pressable
+            style={[styles.subtaskRow, { backgroundColor: colors.cardBackground }]}
+            onLongPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              drag();
+            }}
+            delayLongPress={300}
+          >
+            <Ionicons name="reorder-three-outline" size={20} color={colors.secondaryText} style={{ opacity: 0.5 }} />
+            <Text style={[styles.subtaskTitle, { color: colors.text }]} numberOfLines={1}>
+              {item.title}
+            </Text>
+          </Pressable>
+        </Swipeable>
+      </ScaleDecorator>
+    ),
+    [colors]
+  );
+
   const handleSave = () => {
     const trimmed = title.trim();
     if (!trimmed) return;
 
-    if (repeats) {
+    if (isEditingTemplate) {
+      // Save as template — no date or recurrence, but with subtasks from local state
+      if (existingItem) {
+        updateItem({
+          ...existingItem,
+          title: trimmed,
+          kind: 'template',
+          recurrence: 'once',
+          startDate: formatDate(new Date()),
+          subtasks,
+        });
+      } else {
+        addItem({
+          title: trimmed,
+          recurrence: 'once',
+          startDate: formatDate(new Date()),
+          kind: 'template' as ChecklistItemKind,
+          subtasks,
+        });
+      }
+    } else if (templateId) {
+      // Creating a task from a template: use once + chosen date, clone subtasks
+      addItem({
+        title: trimmed,
+        recurrence: 'once',
+        startDate: formatDate(onceDate),
+        subtasks: templateItem?.subtasks?.map((s) => ({ ...s, completedDates: [] })),
+      });
+    } else if (repeats) {
       const finalRecurrence = recurrence;
       if (existingItem) {
         updateItem({
@@ -94,6 +196,7 @@ export default function EditChecklistScreen() {
           recurrence: finalRecurrence,
           specificDays: finalRecurrence === 'specific-days' ? specificDays : undefined,
           everyNDays: finalRecurrence === 'every-n-days' ? everyNDays : undefined,
+          kind: undefined,
         });
       } else {
         addItem({
@@ -104,7 +207,7 @@ export default function EditChecklistScreen() {
         });
       }
     } else {
-      // One-time item
+      // One-time task
       if (existingItem) {
         updateItem({
           ...existingItem,
@@ -113,6 +216,7 @@ export default function EditChecklistScreen() {
           startDate: formatDate(onceDate),
           specificDays: undefined,
           everyNDays: undefined,
+          kind: undefined,
         });
       } else {
         addItem({
@@ -146,15 +250,19 @@ export default function EditChecklistScreen() {
     );
   };
 
+  const screenTitle = isEditingTemplate
+    ? existingItem ? 'Edit Template' : 'New Template'
+    : templateId
+    ? 'New Task from Template'
+    : existingItem ? 'Edit Item' : 'New Item';
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.separator }]}>
         <Pressable onPress={() => router.back()}>
           <Text style={[styles.headerButton, { color: colors.tint }]}>Cancel</Text>
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          {existingItem ? 'Edit Item' : 'New Item'}
-        </Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{screenTitle}</Text>
         <Pressable onPress={handleSave} disabled={!title.trim()}>
           <Text
             style={[
@@ -167,7 +275,7 @@ export default function EditChecklistScreen() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {/* Title */}
         <Text style={[styles.label, { color: colors.text }]}>Title</Text>
         <TextInput
@@ -182,118 +290,165 @@ export default function EditChecklistScreen() {
           autoFocus={id === 'new'}
         />
 
-        {/* Date row — only when not repeating */}
-        {!repeats && (
+        {/* Subtasks — only for templates */}
+        {isEditingTemplate && (
           <>
-            <Pressable
-              style={[styles.optionRow, { backgroundColor: colors.cardBackground, marginTop: Layout.spacing.lg }]}
-              onPress={() => setShowDatePicker((v) => !v)}
-            >
-              <Text style={[styles.optionLabel, { color: colors.text }]}>Date</Text>
-              <View style={styles.dateRowRight}>
-                <Text style={[styles.dateButtonText, { color: colors.secondaryText }]}>
-                  {formatDisplayDate(onceDate)}
-                </Text>
-                <Ionicons
-                  name={showDatePicker ? 'chevron-up' : 'chevron-down'}
-                  size={16}
-                  color={colors.secondaryText}
-                />
-              </View>
-            </Pressable>
-            {showDatePicker && (
-              <DateTimePicker
-                value={onceDate}
-                mode="date"
-                display="inline"
-                onChange={(_, selectedDate) => {
-                  if (selectedDate) setOnceDate(selectedDate);
-                }}
-                themeVariant={colorScheme}
-                style={styles.iosDatePicker}
+            <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
+              Subtasks
+            </Text>
+
+            {subtasks.length > 0 && (
+              <DraggableFlatList
+                data={subtasks}
+                keyExtractor={(s) => s.id}
+                renderItem={renderSubtaskItem}
+                onDragEnd={({ data }) => setSubtasks(data)}
+                activationDistance={8}
+                scrollEnabled={false}
+                containerStyle={styles.subtaskList}
               />
             )}
+
+            {/* Add subtask input */}
+            <View style={[styles.addSubtaskRow, { backgroundColor: colors.cardBackground }]}>
+              <Ionicons name="add" size={18} color={colors.tint} />
+              <TextInput
+                ref={subtaskInputRef}
+                style={[styles.addSubtaskInput, { color: colors.text }]}
+                placeholder="Add subtask…"
+                placeholderTextColor={colors.secondaryText}
+                value={subtaskInput}
+                onChangeText={setSubtaskInput}
+                onSubmitEditing={() => {
+                  addSubtask();
+                  setTimeout(() => subtaskInputRef.current?.focus(), 50);
+                }}
+                returnKeyType="done"
+                blurOnSubmit={false}
+              />
+            </View>
           </>
         )}
 
-        {/* Repeats toggle */}
-        <View style={[styles.optionRow, { backgroundColor: colors.cardBackground, marginTop: Layout.spacing.sm }]}>
-          <Text style={[styles.optionLabel, { color: colors.text }]}>Repeats</Text>
-          <Switch
-            value={repeats}
-            onValueChange={(val) => {
-              setRepeats(val);
-              setShowDatePicker(false);
-            }}
-            trackColor={{ true: colors.tint }}
-          />
-        </View>
-
-        {/* Recurrence options — only when repeating */}
-        {repeats && (
+        {/* Templates have no date or recurrence */}
+        {!isEditingTemplate && (
           <>
-            <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
-              Frequency
-            </Text>
-            {RECURRENCE_OPTIONS.map((option) => (
-              <Pressable
-                key={option.value}
-                style={[
-                  styles.optionRow,
-                  { backgroundColor: colors.cardBackground },
-                  recurrence === option.value && { borderColor: colors.tint, borderWidth: 2 },
-                ]}
-                onPress={() => setRecurrence(option.value)}
-              >
-                <Text style={[styles.optionLabel, { color: colors.text }]}>{option.label}</Text>
-                {recurrence === option.value && (
-                  <Ionicons name="checkmark-circle" size={20} color={colors.tint} />
-                )}
-              </Pressable>
-            ))}
-
-            {/* Specific days picker */}
-            {recurrence === 'specific-days' && (
-              <View style={styles.daysRow}>
-                {DAY_NAMES.map((name, index) => (
-                  <Pressable
-                    key={index}
-                    style={[
-                      styles.dayChip,
-                      { backgroundColor: colors.cardBackground },
-                      specificDays.includes(index) && { backgroundColor: colors.tint },
-                    ]}
-                    onPress={() => toggleDay(index)}
-                  >
-                    <Text
-                      style={[
-                        styles.dayChipText,
-                        { color: colors.text },
-                        specificDays.includes(index) && { color: '#fff' },
-                      ]}
-                    >
-                      {name}
+            {/* Date row — only when not repeating */}
+            {!repeats && (
+              <>
+                <Pressable
+                  style={[styles.optionRow, { backgroundColor: colors.cardBackground, marginTop: Layout.spacing.lg }]}
+                  onPress={() => setShowDatePicker((v) => !v)}
+                >
+                  <Text style={[styles.optionLabel, { color: colors.text }]}>Date</Text>
+                  <View style={styles.dateRowRight}>
+                    <Text style={[styles.dateButtonText, { color: colors.secondaryText }]}>
+                      {formatDisplayDate(onceDate)}
                     </Text>
-                  </Pressable>
-                ))}
+                    <Ionicons
+                      name={showDatePicker ? 'chevron-up' : 'chevron-down'}
+                      size={16}
+                      color={colors.secondaryText}
+                    />
+                  </View>
+                </Pressable>
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={onceDate}
+                    mode="date"
+                    display="inline"
+                    onChange={(_, selectedDate) => {
+                      if (selectedDate) setOnceDate(selectedDate);
+                    }}
+                    themeVariant={colorScheme}
+                    style={styles.iosDatePicker}
+                  />
+                )}
+              </>
+            )}
+
+            {/* Repeats toggle — hide when creating from template */}
+            {!templateId && (
+              <View style={[styles.optionRow, { backgroundColor: colors.cardBackground, marginTop: Layout.spacing.sm }]}>
+                <Text style={[styles.optionLabel, { color: colors.text }]}>Repeats</Text>
+                <Switch
+                  value={repeats}
+                  onValueChange={(val) => {
+                    setRepeats(val);
+                    setShowDatePicker(false);
+                  }}
+                  trackColor={{ true: colors.tint }}
+                />
               </View>
             )}
 
-            {/* Every N days picker */}
-            {recurrence === 'every-n-days' && (
-              <View style={[styles.stepperContainer, { backgroundColor: colors.cardBackground }]}>
-                <Text style={[styles.optionLabel, { color: colors.text }]}>Every</Text>
-                <View style={styles.stepperRow}>
-                  <Pressable onPress={() => setEveryNDays(Math.max(2, everyNDays - 1))}>
-                    <Ionicons name="remove-circle-outline" size={28} color={colors.tint} />
+            {/* Recurrence options — only when repeating */}
+            {repeats && !templateId && (
+              <>
+                <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
+                  Frequency
+                </Text>
+                {RECURRENCE_OPTIONS.map((option) => (
+                  <Pressable
+                    key={option.value}
+                    style={[
+                      styles.optionRow,
+                      { backgroundColor: colors.cardBackground },
+                      recurrence === option.value && { borderColor: colors.tint, borderWidth: 2 },
+                    ]}
+                    onPress={() => setRecurrence(option.value)}
+                  >
+                    <Text style={[styles.optionLabel, { color: colors.text }]}>{option.label}</Text>
+                    {recurrence === option.value && (
+                      <Ionicons name="checkmark-circle" size={20} color={colors.tint} />
+                    )}
                   </Pressable>
-                  <Text style={[styles.stepperValue, { color: colors.text }]}>{everyNDays}</Text>
-                  <Pressable onPress={() => setEveryNDays(Math.min(30, everyNDays + 1))}>
-                    <Ionicons name="add-circle-outline" size={28} color={colors.tint} />
-                  </Pressable>
-                </View>
-                <Text style={[styles.optionLabel, { color: colors.text }]}>days</Text>
-              </View>
+                ))}
+
+                {/* Specific days picker */}
+                {recurrence === 'specific-days' && (
+                  <View style={styles.daysRow}>
+                    {DAY_NAMES.map((name, index) => (
+                      <Pressable
+                        key={index}
+                        style={[
+                          styles.dayChip,
+                          { backgroundColor: colors.cardBackground },
+                          specificDays.includes(index) && { backgroundColor: colors.tint },
+                        ]}
+                        onPress={() => toggleDay(index)}
+                      >
+                        <Text
+                          style={[
+                            styles.dayChipText,
+                            { color: colors.text },
+                            specificDays.includes(index) && { color: '#fff' },
+                          ]}
+                        >
+                          {name}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+
+                {/* Every N days picker */}
+                {recurrence === 'every-n-days' && (
+                  <View style={[styles.stepperContainer, { backgroundColor: colors.cardBackground }]}>
+                    <Text style={[styles.optionLabel, { color: colors.text }]}>Every</Text>
+                    <View style={styles.stepperRow}>
+                      <Pressable onPress={() => setEveryNDays(Math.max(2, everyNDays - 1))}>
+                        <Ionicons name="remove-circle-outline" size={28} color={colors.tint} />
+                      </Pressable>
+                      <Text style={[styles.stepperValue, { color: colors.text }]}>{everyNDays}</Text>
+                      <Pressable onPress={() => setEveryNDays(Math.min(30, everyNDays + 1))}>
+                        <Ionicons name="add-circle-outline" size={28} color={colors.tint} />
+                      </Pressable>
+                    </View>
+                    <Text style={[styles.optionLabel, { color: colors.text }]}>days</Text>
+                  </View>
+                )}
+              </>
             )}
           </>
         )}
@@ -345,6 +500,40 @@ const styles = StyleSheet.create({
     padding: Layout.spacing.md,
     borderRadius: Layout.borderRadius.md,
   },
+  subtaskList: {
+    marginBottom: Layout.spacing.sm,
+  },
+  subtaskRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.sm,
+    padding: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+    marginBottom: Layout.spacing.sm,
+  },
+  subtaskTitle: {
+    fontSize: Layout.fontSize.body,
+    flex: 1,
+  },
+  subtaskDeleteAction: {
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 52,
+    borderRadius: Layout.borderRadius.md,
+    marginBottom: Layout.spacing.sm,
+  },
+  addSubtaskRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.sm,
+    padding: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+  },
+  addSubtaskInput: {
+    flex: 1,
+    fontSize: Layout.fontSize.body,
+  },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -357,13 +546,6 @@ const styles = StyleSheet.create({
   },
   optionLabel: {
     fontSize: Layout.fontSize.body,
-  },
-  dateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Layout.spacing.md,
-    borderRadius: Layout.borderRadius.md,
-    gap: Layout.spacing.sm,
   },
   dateRowRight: {
     flexDirection: 'row',

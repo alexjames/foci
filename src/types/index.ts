@@ -196,6 +196,8 @@ export interface HomeToolEntry {
 
 export type RecurrenceType = 'once' | 'daily' | 'specific-days' | 'every-n-days' | 'weekdays' | 'weekends';
 
+export type ChecklistItemKind = 'task' | 'recurring' | 'template';
+
 export interface Subtask {
   id: string;
   title: string;
@@ -211,6 +213,8 @@ export interface ChecklistItem {
   startDate: string;
   createdAt: string;
   subtasks?: Subtask[];
+  kind?: ChecklistItemKind; // undefined = 'task' for backward compat
+  trashedAt?: string;       // YYYY-MM-DD, set when a once-task completes at EOD
 }
 
 export interface ChecklistCompletion {
@@ -283,7 +287,11 @@ export type AppAction =
   | { type: 'DELETE_CHECKLIST_ITEM'; payload: string }
   | { type: 'SET_CHECKLIST_COMPLETIONS'; payload: ChecklistCompletion[] }
   | { type: 'TOGGLE_CHECKLIST_COMPLETION'; payload: { itemId: string; date: string } }
-  | { type: 'UPDATE_CHECKLIST_COMPLETION'; payload: ChecklistCompletion };
+  | { type: 'UPDATE_CHECKLIST_COMPLETION'; payload: ChecklistCompletion }
+  | { type: 'MOVE_TO_TRASH'; payload: { itemId: string; trashedAt: string } }
+  | { type: 'RESTORE_FROM_TRASH'; payload: string }
+  | { type: 'DELETE_TRASH_ITEM'; payload: string }
+  | { type: 'PRUNE_TRASH'; payload: string }; // payload = today YYYY-MM-DD
 
 export const STORAGE_KEYS = {
   GOALS: '@foci/goals',
