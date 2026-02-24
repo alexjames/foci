@@ -2644,6 +2644,13 @@ export default function ChecklistScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { spawnRecurringInstances } = useChecklist();
 
+  // Always reset to Tasks view when navigating to this tab
+  useFocusEffect(
+    useCallback(() => {
+      setActiveView('tasks');
+    }, [])
+  );
+
   useLayoutEffect(() => {
     navigation.setOptions({
       headerLeft: () => (
