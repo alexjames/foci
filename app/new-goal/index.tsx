@@ -181,7 +181,7 @@ function IntroStep({
 
   return (
     <View style={styles.stepOuter}>
-      <View style={styles.stepContent}>
+      <View style={[styles.stepContent, styles.introContent]}>
         <Text style={[styles.introTitle, { color: colors.text }]}>
           Setting a SMART Goal
         </Text>
@@ -238,7 +238,10 @@ function TextStep({
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.stepOuter}
     >
-      <ScrollView contentContainerStyle={styles.stepContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.stepContent}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={[styles.stepQuestion, { color: colors.text }]}>{question}</Text>
         {hint ? (
           <Text style={[styles.stepHint, { color: colors.secondaryText }]}>{hint}</Text>
@@ -256,8 +259,8 @@ function TextStep({
           autoFocus
           textAlignVertical="top"
         />
+        <WizardNavButtons onBack={onBack} onNext={onNext} canProceed={canProceed} colors={colors} />
       </ScrollView>
-      <WizardNavButtons onBack={onBack} onNext={onNext} canProceed={canProceed} colors={colors} />
     </KeyboardAvoidingView>
   );
 }
@@ -805,6 +808,9 @@ const styles = StyleSheet.create({
     paddingTop: Layout.spacing.xl,
     flexGrow: 1,
   },
+  introContent: {
+    paddingTop: 56,
+  },
 
   stepQuestion: {
     fontSize: 22,
@@ -832,8 +838,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Layout.spacing.lg,
-    paddingVertical: Layout.spacing.md,
-    paddingBottom: Layout.spacing.xl,
+    paddingTop: Layout.spacing.lg,
+    paddingBottom: Layout.spacing.lg,
   },
   introNavRow: {
     flexDirection: 'row',

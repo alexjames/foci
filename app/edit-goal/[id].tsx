@@ -33,9 +33,11 @@ function SignaturePreview({
   colors: typeof Colors.light;
 }) {
   let paths: Point[][] = [];
+  let viewBox = '0 0 300 220';
   try {
     const parsed = JSON.parse(signature);
     paths = parsed.paths ?? [];
+    if (parsed.viewBox) viewBox = parsed.viewBox;
   } catch {
     return null;
   }
@@ -60,7 +62,7 @@ function SignaturePreview({
           { borderColor: colors.cardBorder, backgroundColor: colors.cardBackground },
         ]}
       >
-        <Svg width="100%" height={120}>
+        <Svg width="100%" height="100%" viewBox={viewBox} preserveAspectRatio="xMidYMid meet">
           {paths.filter((p) => p.length >= 2).map((pts, i) => (
             <Path
               key={i}
@@ -368,7 +370,8 @@ const styles = StyleSheet.create({
     borderRadius: Layout.borderRadius.md,
     borderWidth: 1,
     overflow: 'hidden',
-    height: 120,
+    aspectRatio: 300 / 220,
+    width: '100%',
   },
   clearSigBtn: { alignSelf: 'center', marginTop: Layout.spacing.sm },
   clearSigText: { fontSize: Layout.fontSize.body, fontWeight: '500' },
