@@ -1,6 +1,6 @@
 // === TOOL SYSTEM ===
 
-export type ToolId = 'memento-mori' | 'goals' | 'affirmations' | 'breathing' | 'focus-timer' | 'deadline-tracker' | 'morning-routine' | 'evening-routine' | 'streak-tracker' | 'tally-counter' | 'routines' | 'motivational-quotes' | 'events';
+export type ToolId = 'memento-mori' | 'goals' | 'affirmations' | 'breathing' | 'focus-timer' | 'deadline-tracker' | 'morning-routine' | 'evening-routine' | 'streak-tracker' | 'tally-counter' | 'routines' | 'motivational-quotes' | 'events' | 'lists';
 
 export interface ToolDefinition {
   id: ToolId;
@@ -186,7 +186,27 @@ export interface EventsConfig {
   events: Event[];
 }
 
-export type ToolConfig = MementoMoriConfig | GoalsConfig | AffirmationsConfig | BreathingConfig | FocusTimerConfig | DeadlineTrackerConfig | HabitTrackerConfig | RoutineConfig | TallyCounterConfig | RoutinesConfig | MotivationalQuotesConfig | EventsConfig;
+export interface ListItem {
+  id: string;
+  text: string;
+  checked: boolean;
+  linkedChecklistId?: string;
+  createdAt: string;
+}
+
+export interface List {
+  id: string;
+  title: string;
+  items: ListItem[];
+  createdAt: string;
+}
+
+export interface ListsConfig {
+  toolId: 'lists';
+  lists: List[];
+}
+
+export type ToolConfig = MementoMoriConfig | GoalsConfig | AffirmationsConfig | BreathingConfig | FocusTimerConfig | DeadlineTrackerConfig | HabitTrackerConfig | RoutineConfig | TallyCounterConfig | RoutinesConfig | MotivationalQuotesConfig | EventsConfig | ListsConfig;
 
 export interface HomeToolEntry {
   toolId: ToolId;

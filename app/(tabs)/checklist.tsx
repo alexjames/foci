@@ -37,6 +37,7 @@ import Animated, {
 import Svg, { Circle } from 'react-native-svg';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { getTaskEmoji } from '@/src/utils/taskEmoji';
+import { useLists } from '@/src/hooks/useLists';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -901,6 +902,7 @@ function TodayTab() {
   const colors = Colors[colorScheme];
   const router = useRouter();
   const { getItemsForDate, isCompleted, toggleCompletion, updateCompletion, addItem, updateItem, moveToTrash, spawnRecurringInstances, items } = useChecklist();
+  const { syncChecklistToList } = useLists();
   const today = useMemo(() => startOfDay(new Date()), []);
 
   // Spawn recurring instances when the screen comes into focus (picks up newly added rules)
@@ -982,6 +984,7 @@ function TodayTab() {
 
   const handleToggle = useCallback(
     (item: ChecklistItem, date: Date) => {
+      const nowCompleted = !isCompleted(item.id, date);
       if (date === today) {
         const id = item.id;
         const isPending = pendingComplete.has(id);
@@ -995,10 +998,11 @@ function TodayTab() {
       } else {
         toggleCompletion(item.id, date);
       }
+      syncChecklistToList(item.id, nowCompleted);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setShowQuickAdd(true);
     },
-    [toggleCompletion, today, pendingComplete, isCompleted]
+    [toggleCompletion, syncChecklistToList, today, pendingComplete, isCompleted]
   );
 
   const scrollOffsetRef = useRef(0);
@@ -1417,9 +1421,20 @@ function UpcomingTab() {
   const colors = Colors[colorScheme];
   const router = useRouter();
   const { getItemsForDate, isCompleted, toggleCompletion, updateCompletion, updateItem, moveToTrash, items } = useChecklist();
+  const { syncChecklistToList } = useLists();
   // router used in onEdit inside TaskDetailModal
 
   const today = useMemo(() => startOfDay(new Date()), []);
+
+  const handleToggle = useCallback(
+    (itemId: string, date: Date) => {
+      const nowCompleted = !isCompleted(itemId, date);
+      toggleCompletion(itemId, date);
+      syncChecklistToList(itemId, nowCompleted);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    },
+    [toggleCompletion, syncChecklistToList, isCompleted]
+  );
 
   // Build upcoming entries deduplicated by item id, first occurrence wins
   const { tomorrowEntries, weekEntries, laterEntries } = useMemo(() => {
@@ -1601,10 +1616,7 @@ function UpcomingTab() {
               ]}
             >
               <Pressable
-                onPress={() => {
-                  toggleCompletion(item.id, date);
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }}
+                onPress={() => handleToggle(item.id, date)}
                 hitSlop={8}
                 style={[
                   styles.circleCheckbox,
@@ -1758,10 +1770,7 @@ function UpcomingTab() {
           entries={allEntries}
           initialIndex={detailIndex}
           onClose={() => setDetailIndex(null)}
-          onToggle={(item, date) => {
-            toggleCompletion(item.id, date);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }}
+          onToggle={(item, date) => handleToggle(item.id, date)}
           onFocusComplete={handleFocusComplete}
           isCompleted={isCompleted}
           onEdit={(item) => {
@@ -1833,7 +1842,7 @@ function UpcomingTab() {
                 style={[styles.itemRow, { backgroundColor: colors.cardBackground }]}
               >
                 <Pressable
-                  onPress={() => { toggleCompletion(item.id, date); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                  onPress={() => handleToggle(item.id, date)}
                   hitSlop={8}
                   style={[styles.circleCheckbox, { backgroundColor: colors.tint, borderColor: colors.tint }]}
                 >
@@ -1866,8 +1875,19 @@ function OverdueTab() {
   const colors = Colors[colorScheme];
   const router = useRouter();
   const { getItemsForDate, isCompleted, toggleCompletion, updateCompletion, updateItem, moveToTrash, items } = useChecklist();
+  const { syncChecklistToList } = useLists();
 
   const today = useMemo(() => startOfDay(new Date()), []);
+
+  const handleToggle = useCallback(
+    (itemId: string, date: Date) => {
+      const nowCompleted = !isCompleted(itemId, date);
+      toggleCompletion(itemId, date);
+      syncChecklistToList(itemId, nowCompleted);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    },
+    [toggleCompletion, syncChecklistToList, isCompleted]
+  );
 
   // Build overdue entries split into Yesterday / This Week / Earlier
   const { yesterdayEntries, weekEntries, earlierEntries } = useMemo(() => {
@@ -2048,10 +2068,7 @@ function OverdueTab() {
               ]}
             >
               <Pressable
-                onPress={() => {
-                  toggleCompletion(item.id, date);
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }}
+                onPress={() => handleToggle(item.id, date)}
                 hitSlop={8}
                 style={[
                   styles.circleCheckbox,
@@ -2205,10 +2222,7 @@ function OverdueTab() {
           entries={allEntries}
           initialIndex={detailIndex}
           onClose={() => setDetailIndex(null)}
-          onToggle={(item, date) => {
-            toggleCompletion(item.id, date);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }}
+          onToggle={(item, date) => handleToggle(item.id, date)}
           onFocusComplete={handleFocusComplete}
           isCompleted={isCompleted}
           onEdit={(item) => {
@@ -2280,7 +2294,7 @@ function OverdueTab() {
                 style={[styles.itemRow, { backgroundColor: colors.cardBackground }]}
               >
                 <Pressable
-                  onPress={() => { toggleCompletion(item.id, date); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                  onPress={() => handleToggle(item.id, date)}
                   hitSlop={8}
                   style={[styles.circleCheckbox, { backgroundColor: colors.tint, borderColor: colors.tint }]}
                 >

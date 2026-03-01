@@ -70,6 +70,9 @@ import { QuotesView } from '@/src/components/motivational-quotes/QuotesView';
 // Events import
 import { EventsList, SortMode as EventSortMode } from '@/src/components/events/EventsList';
 
+// Lists import
+import { ListsView } from '@/src/components/lists/ListsView';
+
 function MementoView() {
   const { config, setConfig } = useToolConfig<MementoMoriConfig>('memento-mori');
   const [activeView, setActiveView] = useState<VisualizationType>('hourglass');
@@ -394,6 +397,7 @@ export default function ToolScreen() {
       case 'tally-counter': return <TallyCounterView />;
       case 'motivational-quotes': return <MotivationalQuotesView />;
       case 'events': return <EventsView sortMode={eventSortMode} />;
+      case 'lists': return <ListsView />;
       default: return <Text style={{ color: colors.text }}>Unknown tool</Text>;
     }
   };
