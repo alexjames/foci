@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
   },
   scroll: {
     padding: Layout.spacing.sm,
-    paddingBottom: 24,
+    paddingBottom: 104,
   },
   dateHeader: {
     paddingHorizontal: Layout.spacing.lg,
