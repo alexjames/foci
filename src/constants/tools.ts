@@ -97,6 +97,14 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     description:
       'Create and manage multiple to-do lists. Check items off, reorder them, and send any task to your daily checklist.',
   },
+  {
+    id: 'priorities',
+    name: 'Priorities',
+    tagline: 'Focus on what matters',
+    icon: 'flag-outline',
+    description:
+      'Set up to 3 top priorities. They appear prominently on your home screen so you always know what matters most today.',
+  },
 ];
 
 export const FOCUS_TIMER_PRESETS = [

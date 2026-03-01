@@ -12,6 +12,7 @@ import { Layout } from '@/src/constants/Layout';
 import { useTools } from '@/src/hooks/useTools';
 import { ToolGrid } from '@/src/components/home/ToolGrid';
 import { BriefingCard } from '@/src/components/home/BriefingCard';
+import { PrioritiesCard } from '@/src/components/home/PrioritiesCard';
 
 function formatDate(date: Date): string {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -48,6 +49,7 @@ export default function HomeScreen() {
             <Text style={[styles.dateText, { color: colors.secondaryText }]}>{dateText}</Text>
           </View>
           <BriefingCard />
+          <PrioritiesCard />
         </View>
 
         <ToolGrid

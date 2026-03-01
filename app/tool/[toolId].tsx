@@ -73,6 +73,9 @@ import { EventsList, SortMode as EventSortMode } from '@/src/components/events/E
 // Lists import
 import { ListsView } from '@/src/components/lists/ListsView';
 
+// Priorities import
+import { PrioritiesView } from '@/src/components/priorities/PrioritiesView';
+
 function MementoView() {
   const { config, setConfig } = useToolConfig<MementoMoriConfig>('memento-mori');
   const [activeView, setActiveView] = useState<VisualizationType>('hourglass');
@@ -398,6 +401,7 @@ export default function ToolScreen() {
       case 'motivational-quotes': return <MotivationalQuotesView />;
       case 'events': return <EventsView sortMode={eventSortMode} />;
       case 'lists': return <ListsView />;
+      case 'priorities': return <PrioritiesView />;
       default: return <Text style={{ color: colors.text }}>Unknown tool</Text>;
     }
   };
