@@ -15,7 +15,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const visibleRoutes = state.routes.filter((route) => !HIDDEN_ROUTES.includes(route.name));
 
   return (
-    <View style={[styles.wrapper, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+    <View style={[styles.wrapper, { paddingBottom: insets.bottom + 4 }]}>
       <View
         style={[
           styles.pill,
@@ -60,7 +60,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    bottom: 0,
+    bottom: -8,
     left: 0,
     right: 0,
     alignItems: 'center',
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderRadius: 32,
     paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 16,
