@@ -4,6 +4,7 @@ import {
   Dimensions,
   FlatList,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -147,7 +148,11 @@ function PrimingScreen({
   const contentTop = topInset + 48 + 24;
 
   return (
-    <View style={[styles.screen, { width: SCREEN_WIDTH, paddingTop: contentTop }]}>
+    <ScrollView
+      style={[styles.screen, { width: SCREEN_WIDTH }]}
+      contentContainerStyle={{ paddingTop: contentTop, paddingBottom: Layout.spacing.xxl }}
+      showsVerticalScrollIndicator={false}
+    >
       <Animated.Text style={[styles.screenTitle, { color: colors.text, opacity: titleOpacity }]}>
         {screen.title}
       </Animated.Text>
@@ -165,7 +170,7 @@ function PrimingScreen({
           </Animated.View>
         ))}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
