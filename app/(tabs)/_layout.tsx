@@ -11,8 +11,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const colors = Colors[colorScheme];
   const insets = useSafeAreaInsets();
 
-  const HIDDEN_ROUTES = ['toolbox'];
-  const visibleRoutes = state.routes.filter((route) => !HIDDEN_ROUTES.includes(route.name));
+  const visibleRoutes = state.routes;
 
   return (
     <View style={[styles.wrapper, { paddingBottom: insets.bottom + 4 }]}>
@@ -123,7 +122,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="toolbox"
         options={{
-          href: null,
+          title: 'Tools',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="grid-outline" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen

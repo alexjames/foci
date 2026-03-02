@@ -19,7 +19,7 @@ export default function ToolboxScreen() {
     <ToolCard
       tool={item}
       isAdded={isToolOnHome(item.id)}
-      onPress={() => router.push(`/tool-config/${item.id}` as any)}
+      onPress={() => router.push(`/tool/${item.id}` as any)}
     />
   );
 
