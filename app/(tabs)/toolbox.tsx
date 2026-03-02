@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, FlatList, View } from 'react-native';
+import { StyleSheet, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/components/useColorScheme';
 import { Colors } from '@/src/constants/Colors';
@@ -7,7 +7,6 @@ import { Layout } from '@/src/constants/Layout';
 import { TOOL_REGISTRY } from '@/src/constants/tools';
 import { useTools } from '@/src/hooks/useTools';
 import { ToolCard } from '@/src/components/toolbox/ToolCard';
-import { ToolDefinition } from '@/src/types';
 
 export default function ToolboxScreen() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -15,23 +14,22 @@ export default function ToolboxScreen() {
   const router = useRouter();
   const { isToolOnHome } = useTools();
 
-  const renderItem = ({ item }: { item: ToolDefinition }) => (
-    <ToolCard
-      tool={item}
-      isAdded={isToolOnHome(item.id)}
-      onPress={() => router.push(`/tool/${item.id}` as any)}
-    />
-  );
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <FlatList
-        data={TOOL_REGISTRY}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        contentContainerStyle={styles.list}
-      />
+      <ScrollView contentContainerStyle={styles.list}>
+        <View style={styles.group}>
+          {TOOL_REGISTRY.map((tool, index) => (
+            <ToolCard
+              key={tool.id}
+              tool={tool}
+              isAdded={isToolOnHome(tool.id)}
+              onPress={() => router.push(`/tool/${tool.id}` as any)}
+              isFirst={index === 0}
+              isLast={index === TOOL_REGISTRY.length - 1}
+            />
+          ))}
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -41,6 +39,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   list: {
-    padding: Layout.spacing.sm,
+    padding: Layout.spacing.md,
+    paddingBottom: Layout.spacing.xxl,
+  },
+  group: {
+    borderRadius: Layout.borderRadius.md,
+    overflow: 'hidden',
   },
 });
