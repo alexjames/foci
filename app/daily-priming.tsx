@@ -24,6 +24,7 @@ import {
   DeadlineTrackerConfig,
   EventsConfig,
   EventRecurrence,
+  IdentitiesConfig,
 } from '@/src/types';
 import { getTaskEmoji } from '@/src/utils/taskEmoji';
 
@@ -207,6 +208,9 @@ export default function DailyPrimingScreen() {
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [deadlineConfig]);
 
+  const { config: identitiesConfig } = useToolConfig<IdentitiesConfig>('identities');
+  const identities = identitiesConfig?.identities ?? [];
+
   const { config: eventsConfig } = useToolConfig<EventsConfig>('events');
   const upcomingEvents = useMemo(() => {
     const events = eventsConfig?.events ?? [];
@@ -226,6 +230,16 @@ export default function DailyPrimingScreen() {
       title: getGreeting(),
       items: [{ kind: 'text', value: "Let's make today count." }],
     });
+
+    for (const identity of identities) {
+      if (identity.affirmations.length > 0) {
+        result.push({
+          id: `identity-${identity.id}`,
+          title: `I am ${identity.title}`,
+          items: identity.affirmations.map((a) => ({ kind: 'text' as const, value: a.text })),
+        });
+      }
+    }
 
     if (goals.length > 0) {
       result.push({
@@ -290,7 +304,7 @@ export default function DailyPrimingScreen() {
     }
 
     return result;
-  }, [goals, priorities, pendingTasks, habits, upcomingDeadlines, upcomingEvents]);
+  }, [goals, identities, priorities, pendingTasks, habits, upcomingDeadlines, upcomingEvents]);
 
   // ── Navigation ────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 // === TOOL SYSTEM ===
 
-export type ToolId = 'memento-mori' | 'goals' | 'affirmations' | 'breathing' | 'focus-timer' | 'deadline-tracker' | 'morning-routine' | 'evening-routine' | 'streak-tracker' | 'tally-counter' | 'routines' | 'motivational-quotes' | 'events' | 'lists' | 'priorities';
+export type ToolId = 'memento-mori' | 'goals' | 'identities' | 'breathing' | 'focus-timer' | 'deadline-tracker' | 'morning-routine' | 'evening-routine' | 'streak-tracker' | 'tally-counter' | 'routines' | 'motivational-quotes' | 'events' | 'lists' | 'priorities';
 
 export interface ToolDefinition {
   id: ToolId;
@@ -24,18 +24,24 @@ export interface GoalsConfig {
   notificationTime?: { hour: number; minute: number };
 }
 
-export interface AffirmationsConfig {
-  toolId: 'affirmations';
-  affirmations: Affirmation[];
-  selectedCategories: string[];
-  notificationEnabled: boolean;
-  notificationTime?: { hour: number; minute: number };
-}
-
-export interface Affirmation {
+export interface IdentityAffirmation {
   id: string;
   text: string;
   createdAt: string;
+}
+
+export interface Identity {
+  id: string;
+  title: string;
+  affirmations: IdentityAffirmation[];
+  createdAt: string;
+}
+
+export interface IdentitiesConfig {
+  toolId: 'identities';
+  identities: Identity[];
+  notificationEnabled: boolean;
+  notificationTime?: { hour: number; minute: number };
 }
 
 export interface BreathingConfig {
@@ -217,7 +223,7 @@ export interface PrioritiesConfig {
   priorities: Priority[];
 }
 
-export type ToolConfig = MementoMoriConfig | GoalsConfig | AffirmationsConfig | BreathingConfig | FocusTimerConfig | DeadlineTrackerConfig | HabitTrackerConfig | RoutineConfig | TallyCounterConfig | RoutinesConfig | MotivationalQuotesConfig | EventsConfig | ListsConfig | PrioritiesConfig;
+export type ToolConfig = MementoMoriConfig | GoalsConfig | IdentitiesConfig | BreathingConfig | FocusTimerConfig | DeadlineTrackerConfig | HabitTrackerConfig | RoutineConfig | TallyCounterConfig | RoutinesConfig | MotivationalQuotesConfig | EventsConfig | ListsConfig | PrioritiesConfig;
 
 export interface HomeToolEntry {
   toolId: ToolId;

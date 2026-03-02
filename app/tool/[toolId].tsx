@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
-import { ToolId, MementoMoriConfig, AffirmationsConfig, BreathingConfig, Goal } from '@/src/types';
+import { ToolId, MementoMoriConfig, BreathingConfig, Goal } from '@/src/types';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
 import { TOOL_REGISTRY, DEADLINE_COLORS } from '@/src/constants/tools';
 
@@ -48,9 +48,8 @@ import { BreathingSessionView } from '@/src/components/breathing/BreathingSessio
 // Focus Timer imports
 import { FocusTimerSession } from '@/src/components/focus-timer/FocusTimerSession';
 
-// Affirmation imports
-import { AffirmationsList } from '@/src/components/affirmations/AffirmationsList';
-import { AffirmationsPlayerView } from '@/src/components/affirmations/AffirmationsPlayerView';
+// Identities import
+import { IdentitiesList } from '@/src/components/identities/IdentitiesList';
 
 // Deadline Tracker imports
 import { DeadlineTrackerList, SortMode } from '@/src/components/deadline-tracker/DeadlineTrackerList';
@@ -297,14 +296,8 @@ function GoalsView() {
   );
 }
 
-function AffirmationsView({ playing, onPlay, onClosePlayer }: { playing: boolean; onPlay: () => void; onClosePlayer: () => void }) {
-  const { config } = useToolConfig<AffirmationsConfig>('affirmations');
-  const allItems = (config?.affirmations ?? []).map((a) => a.text);
-
-  if (playing) {
-    return <AffirmationsPlayerView items={allItems} />;
-  }
-  return <AffirmationsList onPlay={onPlay} />;
+function IdentitiesView() {
+  return <IdentitiesList />;
 }
 
 function BreathingView() {
@@ -361,8 +354,6 @@ export default function ToolScreen() {
   const tool = TOOL_REGISTRY.find((t) => t.id === toolId);
   const [sortMode, setSortMode] = useState<SortMode>('manual');
   const [eventSortMode, setEventSortMode] = useState<EventSortMode>('manual');
-  const [affirmationsPlaying, setAffirmationsPlaying] = useState(false);
-
   const cycleSort = () => {
     setSortMode((prev) => {
       const idx = SORT_MODES.indexOf(prev);
@@ -379,19 +370,12 @@ export default function ToolScreen() {
 
   const isDeadlineTracker = toolId === 'deadline-tracker';
   const isEvents = toolId === 'events';
-  const isAffirmations = toolId === 'affirmations';
 
   const renderTool = () => {
     switch (toolId as ToolId) {
       case 'memento-mori': return <MementoView />;
       case 'goals': return <GoalsView />;
-      case 'affirmations': return (
-        <AffirmationsView
-          playing={affirmationsPlaying}
-          onPlay={() => setAffirmationsPlaying(true)}
-          onClosePlayer={() => setAffirmationsPlaying(false)}
-        />
-      );
+      case 'identities': return <IdentitiesView />;
       case 'breathing': return <BreathingView />;
       case 'focus-timer': return <FocusTimerView />;
       case 'deadline-tracker': return <DeadlineTrackerView sortMode={sortMode} />;
@@ -410,13 +394,7 @@ export default function ToolScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.separator }]}>
         <Pressable
-          onPress={() => {
-            if (isAffirmations && affirmationsPlaying) {
-              setAffirmationsPlaying(false);
-            } else {
-              router.back();
-            }
-          }}
+          onPress={() => router.back()}
           hitSlop={8}
         >
           <Ionicons name="chevron-back" size={24} color={colors.tint} />

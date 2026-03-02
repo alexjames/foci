@@ -18,12 +18,12 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
       'Define up to 5 meaningful goals with outcomes, reasons, and consequences. Review them daily with an immersive reveal.',
   },
   {
-    id: 'affirmations',
-    name: 'Affirmations',
-    tagline: 'Speak your truth',
-    icon: 'heart-outline',
+    id: 'identities',
+    name: 'Identities',
+    tagline: 'Define who you are',
+    icon: 'person-outline',
     description:
-      'Create a list of personal affirmations. See them in a scrollable carousel on your home screen.',
+      'Create up to 3 identities — each with its own set of affirmations. Reinforce who you are every morning during Daily Priming.',
   },
   {
     id: 'breathing',
