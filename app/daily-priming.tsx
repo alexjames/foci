@@ -106,9 +106,11 @@ interface PrimingScreenData {
 function PrimingScreen({
   screen,
   isCurrent,
+  topInset,
 }: {
   screen: PrimingScreenData;
   isCurrent: boolean;
+  topInset: number;
 }) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
@@ -140,8 +142,11 @@ function PrimingScreen({
     ]).start();
   }, [isCurrent]);
 
+  // Close button bottom: topInset + 12 (top) + 36 (height) = topInset + 48, plus 24px spacing
+  const contentTop = topInset + 48 + 24;
+
   return (
-    <View style={[styles.screen, { width: SCREEN_WIDTH }]}>
+    <View style={[styles.screen, { width: SCREEN_WIDTH, paddingTop: contentTop }]}>
       <Animated.Text style={[styles.screenTitle, { color: colors.text, opacity: titleOpacity }]}>
         {screen.title}
       </Animated.Text>
@@ -309,7 +314,7 @@ export default function DailyPrimingScreen() {
         data={screens}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => (
-          <PrimingScreen screen={item} isCurrent={index === currentIndex} />
+          <PrimingScreen screen={item} isCurrent={index === currentIndex} topInset={insets.top} />
         )}
         horizontal
         pagingEnabled
@@ -341,26 +346,25 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     paddingHorizontal: Layout.spacing.xl,
-    paddingTop: '20%',
   },
   screenTitle: {
-    fontSize: Layout.fontSize.heading,
+    fontSize: Layout.fontSize.hero,
     fontWeight: '700',
     marginBottom: Layout.spacing.xl,
-    lineHeight: 38,
+    lineHeight: 44,
   },
   itemList: {
     gap: Layout.spacing.md,
   },
   itemText: {
-    fontSize: Layout.fontSize.body,
-    lineHeight: 26,
+    fontSize: Layout.fontSize.title,
+    lineHeight: 30,
   },
   twoLineItem: {
-    gap: 2,
+    gap: 4,
   },
   itemSub: {
-    fontSize: Layout.fontSize.caption,
+    fontSize: Layout.fontSize.body,
   },
   closeBtn: {
     position: 'absolute',

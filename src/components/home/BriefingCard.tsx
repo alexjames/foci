@@ -331,9 +331,10 @@ function EventsSection({ events }: { events: Array<Event & { daysUntil: number }
                 <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>{event.title}</Text>
                 <Text style={[styles.itemSub, { color: colors.secondaryText }]}>{formatEventDate(event.date)}</Text>
               </View>
-              <Text style={[styles.daysAway, { color: accentColor }]}>
-                {daysUntil === 0 ? 'Today' : `in ${daysUntil}d`}
-              </Text>
+              <View style={styles.daysRight}>
+                <Text style={[styles.daysNum, { color: accentColor }]}>{daysUntil}</Text>
+                <Text style={[styles.daysSub, { color: colors.secondaryText }]}>{daysUntil === 0 ? 'today' : daysUntil === 1 ? 'day to go' : 'days to go'}</Text>
+              </View>
             </Pressable>
           );
         })}
@@ -559,10 +560,10 @@ export function BriefingCard() {
             today={today}
             toggleCompletion={toggleCompletion}
           />
-          <DeadlinesSection deadlines={upcomingDeadlines} />
-          <EventsSection events={upcomingEvents} />
           <RoutinesSection routines={routines} />
           <HabitsSection habits={habits} onToggleDay={toggleHabitDay} />
+          <DeadlinesSection deadlines={upcomingDeadlines} />
+          <EventsSection events={upcomingEvents} />
         </View>
       )}
     </View>
@@ -657,10 +658,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  daysAway: {
-    fontSize: Layout.fontSize.caption,
-    fontWeight: '600',
   },
   // Routines
   routineIconCircle: {
