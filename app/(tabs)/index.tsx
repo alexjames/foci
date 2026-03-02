@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: Layout.spacing.lg,
     alignItems: 'flex-end',
-    gap: Layout.spacing.sm,
+    gap: Layout.spacing.md,
   },
   fab: {
     width: 56,
@@ -175,6 +175,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
