@@ -215,6 +215,7 @@ export interface ListsConfig {
 export interface Priority {
   id: string;
   text: string; // max 140 chars
+  goalId: string | 'non-goal';
   createdAt: string;
 }
 

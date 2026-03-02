@@ -9,8 +9,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  useColorScheme,
+  ScrollView,
 } from 'react-native';
+import { useColorScheme } from '@/components/useColorScheme';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
@@ -19,10 +20,22 @@ import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
 import { Priority, PrioritiesConfig } from '@/src/types';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
+import { useAppContext } from '@/src/context/AppContext';
 
 const MAX_PRIORITIES = 3;
 const MAX_CHARS = 140;
 const DEFAULT_CONFIG: PrioritiesConfig = { toolId: 'priorities', priorities: [] };
+
+function CompleteAction() {
+  return (
+    <View style={styles.swipeActionLeft}>
+      <View style={styles.swipeActionContent}>
+        <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />
+        <Text style={styles.swipeText}>Done</Text>
+      </View>
+    </View>
+  );
+}
 
 function DeleteAction() {
   return (
@@ -38,7 +51,10 @@ function DeleteAction() {
 function SwipeablePriorityCard({
   priority,
   rank,
-  onEdit,
+  goalName,
+  goalColor,
+  onComplete,
+  onCardPress,
   onDelete,
   drag,
   isActive,
@@ -46,7 +62,10 @@ function SwipeablePriorityCard({
 }: {
   priority: Priority;
   rank: number;
-  onEdit: (priority: Priority) => void;
+  goalName: string | null;
+  goalColor: string | undefined;
+  onComplete: (id: string, text: string) => void;
+  onCardPress: (priority: Priority) => void;
   onDelete: (id: string, text: string) => void;
   drag: () => void;
   isActive: boolean;
@@ -61,18 +80,22 @@ function SwipeablePriorityCard({
       <View style={[styles.swipeableContainer, isActive && styles.swipeableActive]}>
         <Swipeable
           ref={swipeableRef}
+          renderLeftActions={() => <CompleteAction />}
           renderRightActions={() => <DeleteAction />}
           onSwipeableOpen={(direction) => {
-            if (direction === 'right') {
-              swipeableRef.current?.close();
+            swipeableRef.current?.close();
+            if (direction === 'left') {
+              onComplete(priority.id, priority.text);
+            } else if (direction === 'right') {
               onDelete(priority.id, priority.text);
             }
           }}
+          overshootLeft={false}
           overshootRight={false}
           enabled={!isActive}
         >
           <Pressable
-            onPress={() => onEdit(priority)}
+            onPress={() => onCardPress(priority)}
             onLongPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               drag();
@@ -80,9 +103,19 @@ function SwipeablePriorityCard({
             style={[styles.card, { backgroundColor: colors.cardBackground }]}
           >
             <Text style={[styles.rank, { color: colors.tint }]}>{rank}</Text>
-            <Text style={[styles.cardText, { color: colors.text }]} numberOfLines={3}>
-              {priority.text}
-            </Text>
+            <View style={styles.cardBody}>
+              <Text style={[styles.cardText, { color: colors.text }]} numberOfLines={3}>
+                {priority.text}
+              </Text>
+              {goalName !== null && (
+                <View style={[styles.goalBadge, { backgroundColor: (goalColor ?? colors.tint) + '22' }]}>
+                  <View style={[styles.goalDot, { backgroundColor: goalColor ?? colors.tint }]} />
+                  <Text style={[styles.goalBadgeText, { color: goalColor ?? colors.tint }]} numberOfLines={1}>
+                    {goalName}
+                  </Text>
+                </View>
+              )}
+            </View>
             {showHandle && (
               <Ionicons
                 name="reorder-three-outline"
@@ -98,29 +131,117 @@ function SwipeablePriorityCard({
   );
 }
 
+function PriorityDetailSheet({
+  priority,
+  rank,
+  goalName,
+  goalColor,
+  visible,
+  onClose,
+  onEdit,
+  onComplete,
+  onDelete,
+}: {
+  priority: Priority | null;
+  rank: number;
+  goalName: string | null;
+  goalColor: string | undefined;
+  visible: boolean;
+  onClose: () => void;
+  onEdit: () => void;
+  onComplete: (id: string, text: string) => void;
+  onDelete: (id: string, text: string) => void;
+}) {
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+
+  if (!priority) return null;
+
+  const accent = goalColor ?? colors.tint;
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose} />
+      <View style={[styles.sheet, { backgroundColor: colors.cardBackground, borderTopColor: colors.tint }]}>
+        <View style={[styles.handle, { backgroundColor: colors.cardBorder }]} />
+
+        <View style={styles.sheetTitleRow}>
+          <View style={{ width: 38 }} />
+          <View style={styles.sheetTitleCenter}>
+            <Text style={[styles.sheetRank, { color: colors.tint }]}>{rank}</Text>
+          </View>
+          <Pressable onPress={onEdit} hitSlop={8} style={styles.editButton}>
+            <Ionicons name="pencil-outline" size={20} color={colors.secondaryText} />
+          </Pressable>
+        </View>
+
+        <Text style={[styles.sheetText, { color: colors.text }]}>{priority.text}</Text>
+
+        {goalName !== null && (
+          <View style={[styles.sheetGoalBadge, { backgroundColor: accent + '22' }]}>
+            <View style={[styles.sheetGoalDot, { backgroundColor: accent }]} />
+            <Text style={[styles.sheetGoalText, { color: accent }]}>{goalName}</Text>
+          </View>
+        )}
+
+        <View style={styles.sheetActions}>
+          <Pressable
+            style={[styles.sheetActionBtn, { backgroundColor: '#34C75922' }]}
+            onPress={() => {
+              onClose();
+              onComplete(priority.id, priority.text);
+            }}
+          >
+            <Ionicons name="checkmark-circle-outline" size={20} color="#34C759" />
+            <Text style={[styles.sheetActionText, { color: '#34C759' }]}>Mark Complete</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.sheetActionBtn, { backgroundColor: colors.destructive + '18' }]}
+            onPress={() => {
+              onClose();
+              onDelete(priority.id, priority.text);
+            }}
+          >
+            <Ionicons name="trash-outline" size={20} color={colors.destructive} />
+            <Text style={[styles.sheetActionText, { color: colors.destructive }]}>Delete</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function EditPriorityModal({
   visible,
   initial,
+  initialGoalId,
+  goals,
   onClose,
   onSave,
 }: {
   visible: boolean;
   initial: string;
+  initialGoalId: string;
+  goals: { id: string; name: string; color?: string }[];
   onClose: () => void;
-  onSave: (text: string) => void;
+  onSave: (text: string, goalId: string) => void;
 }) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const [text, setText] = useState(initial);
+  const [selectedGoalId, setSelectedGoalId] = useState<string>(initialGoalId || 'non-goal');
 
   React.useEffect(() => {
-    if (visible) setText(initial);
-  }, [visible, initial]);
+    if (visible) {
+      setText(initial);
+      setSelectedGoalId(initialGoalId || 'non-goal');
+    }
+  }, [visible, initial, initialGoalId]);
 
   const handleSave = () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    onSave(trimmed);
+    onSave(trimmed, selectedGoalId);
     onClose();
   };
 
@@ -130,6 +251,13 @@ function EditPriorityModal({
   };
 
   const remaining = MAX_CHARS - text.length;
+  const isEditing = !!initial;
+  const canSave = !!text.trim() && !!selectedGoalId;
+
+  const goalOptions = [
+    { id: 'non-goal', name: 'Non-Goal', color: undefined },
+    ...goals,
+  ];
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
@@ -138,11 +266,56 @@ function EditPriorityModal({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <Pressable style={styles.backdrop} onPress={handleClose} />
-        <View style={[styles.sheet, { backgroundColor: colors.cardBackground }]}>
+        <View style={[styles.editSheet, { backgroundColor: colors.cardBackground }]}>
           <View style={[styles.handle, { backgroundColor: colors.cardBorder }]} />
           <Text style={[styles.sheetTitle, { color: colors.text }]}>
-            {initial ? 'Edit Priority' : 'New Priority'}
+            {isEditing ? 'Edit Priority' : 'New Priority'}
           </Text>
+
+          {/* Goal picker */}
+          <Text style={[styles.pickerLabel, { color: colors.secondaryText }]}>Link to Goal</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.goalPicker}
+            contentContainerStyle={styles.goalPickerContent}
+          >
+            {goalOptions.map((goal) => {
+              const selected = selectedGoalId === goal.id;
+              const accent = goal.color ?? colors.tint;
+              return (
+                <Pressable
+                  key={goal.id}
+                  onPress={() => setSelectedGoalId(goal.id)}
+                  style={[
+                    styles.goalChip,
+                    {
+                      backgroundColor: selected ? accent + '22' : colors.background,
+                      borderColor: selected ? accent : colors.separator,
+                    },
+                  ]}
+                >
+                  {goal.id !== 'non-goal' && (
+                    <View style={[styles.chipDot, { backgroundColor: accent }]} />
+                  )}
+                  <Text
+                    style={[
+                      styles.goalChipText,
+                      { color: selected ? accent : colors.secondaryText, fontWeight: selected ? '600' : '400' },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {goal.name}
+                  </Text>
+                  {selected && (
+                    <Ionicons name="checkmark" size={14} color={accent} />
+                  )}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {/* Text input */}
           <TextInput
             style={[
               styles.sheetInput,
@@ -154,7 +327,7 @@ function EditPriorityModal({
             ]}
             value={text}
             onChangeText={(t) => setText(t.slice(0, MAX_CHARS))}
-            placeholder="What's your top priority?"
+            placeholder="Be specific. Define an outcome."
             placeholderTextColor={colors.secondaryText}
             multiline
             autoFocus
@@ -163,6 +336,7 @@ function EditPriorityModal({
           <Text style={[styles.charCount, { color: remaining <= 20 ? colors.destructive : colors.secondaryText }]}>
             {remaining} characters remaining
           </Text>
+
           <View style={styles.sheetButtons}>
             <Pressable
               onPress={handleClose}
@@ -172,10 +346,10 @@ function EditPriorityModal({
             </Pressable>
             <Pressable
               onPress={handleSave}
-              disabled={!text.trim()}
+              disabled={!canSave}
               style={[
                 styles.sheetBtn,
-                { backgroundColor: colors.tint, opacity: text.trim() ? 1 : 0.4 },
+                { backgroundColor: colors.tint, opacity: canSave ? 1 : 0.4 },
               ]}
             >
               <Text style={[styles.sheetBtnText, { color: '#fff' }]}>Save</Text>
@@ -191,12 +365,15 @@ export function PrioritiesView() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const { config, setConfig } = useToolConfig<PrioritiesConfig>('priorities');
+  const { state } = useAppContext();
   const [modalVisible, setModalVisible] = useState(false);
   const [editingPriority, setEditingPriority] = useState<Priority | null>(null);
+  const [selectedPriority, setSelectedPriority] = useState<Priority | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const priorities = config?.priorities ?? [];
   const canAdd = priorities.length < MAX_PRIORITIES;
+  const goals = [...state.goals].sort((a, b) => a.order - b.order);
 
   const handleAdd = () => {
     setEditingPriority(null);
@@ -204,28 +381,46 @@ export function PrioritiesView() {
   };
 
   const handleEdit = (priority: Priority) => {
+    setSelectedPriority(null);
     setEditingPriority(priority);
     setModalVisible(true);
   };
 
-  const handleSave = (text: string) => {
+  const handleSave = (text: string, goalId: string) => {
     const current = config ?? DEFAULT_CONFIG;
     if (editingPriority) {
       setConfig({
         ...current,
         priorities: current.priorities.map((p) =>
-          p.id === editingPriority.id ? { ...p, text } : p
+          p.id === editingPriority.id ? { ...p, text, goalId } : p
         ),
       });
     } else {
       const newPriority: Priority = {
         id: `pri-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         text,
+        goalId,
         createdAt: new Date().toISOString(),
       };
       setConfig({ ...current, priorities: [...current.priorities, newPriority] });
     }
   };
+
+  const handleComplete = useCallback(
+    (id: string, text: string) => {
+      Alert.alert('Mark Complete', `Mark "${text.length > 60 ? text.slice(0, 60) + '…' : text}" as done?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Complete',
+          onPress: () => {
+            const current = config ?? DEFAULT_CONFIG;
+            setConfig({ ...current, priorities: current.priorities.filter((p) => p.id !== id) });
+          },
+        },
+      ]);
+    },
+    [config, setConfig]
+  );
 
   const handleDelete = useCallback(
     (id: string, text: string) => {
@@ -254,18 +449,27 @@ export function PrioritiesView() {
   );
 
   const renderItem = useCallback(
-    ({ item, index, drag, isActive }: RenderItemParams<Priority>) => (
-      <SwipeablePriorityCard
-        priority={item}
-        rank={(index ?? 0) + 1}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        drag={() => { setIsDragging(true); drag(); }}
-        isActive={isActive}
-        showHandle={isDragging}
-      />
-    ),
-    [handleEdit, handleDelete, isDragging]
+    ({ item, drag, isActive }: RenderItemParams<Priority>) => {
+      const rank = priorities.indexOf(item) + 1;
+      const linkedGoal = item.goalId && item.goalId !== 'non-goal'
+        ? goals.find((g) => g.id === item.goalId) ?? null
+        : null;
+      return (
+        <SwipeablePriorityCard
+          priority={item}
+          rank={rank}
+          goalName={linkedGoal ? linkedGoal.name : null}
+          goalColor={linkedGoal?.color}
+          onComplete={handleComplete}
+          onCardPress={setSelectedPriority}
+          onDelete={handleDelete}
+          drag={() => { setIsDragging(true); drag(); }}
+          isActive={isActive}
+          showHandle={isDragging}
+        />
+      );
+    },
+    [priorities, handleComplete, handleDelete, isDragging, goals]
   );
 
   return (
@@ -309,9 +513,32 @@ export function PrioritiesView() {
       <EditPriorityModal
         visible={modalVisible}
         initial={editingPriority?.text ?? ''}
+        initialGoalId={editingPriority?.goalId ?? ''}
+        goals={goals}
         onClose={() => setModalVisible(false)}
         onSave={handleSave}
       />
+
+      {(() => {
+        const p = selectedPriority;
+        const rank = p ? priorities.indexOf(p) + 1 : 0;
+        const linkedGoal = p && p.goalId && p.goalId !== 'non-goal'
+          ? goals.find((g) => g.id === p.goalId) ?? null
+          : null;
+        return (
+          <PriorityDetailSheet
+            priority={p}
+            rank={rank}
+            goalName={linkedGoal ? linkedGoal.name : null}
+            goalColor={linkedGoal?.color}
+            visible={selectedPriority !== null}
+            onClose={() => setSelectedPriority(null)}
+            onEdit={() => handleEdit(p!)}
+            onComplete={handleComplete}
+            onDelete={handleDelete}
+          />
+        );
+      })()}
     </View>
   );
 }
@@ -336,6 +563,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 8,
+  },
+  swipeActionLeft: {
+    flex: 1,
+    backgroundColor: '#34C759',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    paddingLeft: Layout.spacing.lg,
+    borderRadius: Layout.borderRadius.md,
   },
   swipeActionRight: {
     flex: 1,
@@ -366,10 +601,32 @@ const styles = StyleSheet.create({
     width: 28,
     textAlign: 'center',
   },
-  cardText: {
+  cardBody: {
     flex: 1,
+    gap: Layout.spacing.xs,
+  },
+  cardText: {
     fontSize: Layout.fontSize.body,
     lineHeight: 22,
+  },
+  goalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 99,
+    gap: 5,
+  },
+  goalDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  goalBadgeText: {
+    fontSize: Layout.fontSize.caption,
+    fontWeight: '500',
+    maxWidth: 180,
   },
   emptyState: {
     alignItems: 'center',
@@ -433,11 +690,84 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
-  sheet: {
+  editSheet: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: Layout.spacing.lg,
     paddingBottom: Layout.spacing.xxl,
+  },
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderTopWidth: 4,
+    padding: Layout.spacing.lg,
+    paddingBottom: Layout.spacing.xxl,
+  },
+  sheetTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Layout.spacing.md,
+  },
+  sheetTitleCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  sheetRank: {
+    fontSize: 48,
+    fontWeight: '700',
+    lineHeight: 56,
+  },
+  editButton: {
+    width: 38,
+    alignItems: 'flex-end',
+  },
+  sheetText: {
+    fontSize: Layout.fontSize.title,
+    lineHeight: 28,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginBottom: Layout.spacing.md,
+  },
+  sheetGoalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 99,
+    gap: 6,
+    marginBottom: Layout.spacing.lg,
+  },
+  sheetGoalDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  sheetGoalText: {
+    fontSize: Layout.fontSize.body,
+    fontWeight: '600',
+  },
+  sheetActions: {
+    flexDirection: 'row',
+    gap: Layout.spacing.sm,
+    marginTop: Layout.spacing.sm,
+  },
+  sheetActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Layout.spacing.sm,
+    padding: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+  },
+  sheetActionText: {
+    fontSize: Layout.fontSize.body,
+    fontWeight: '600',
   },
   handle: {
     width: 40,
@@ -450,6 +780,38 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.title,
     fontWeight: '600',
     marginBottom: Layout.spacing.md,
+  },
+  pickerLabel: {
+    fontSize: Layout.fontSize.caption,
+    fontWeight: '600',
+    marginBottom: Layout.spacing.sm,
+    letterSpacing: 0.3,
+  },
+  goalPicker: {
+    marginBottom: Layout.spacing.md,
+  },
+  goalPickerContent: {
+    gap: Layout.spacing.sm,
+    paddingRight: Layout.spacing.sm,
+  },
+  goalChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Layout.spacing.md,
+    paddingVertical: Layout.spacing.sm,
+    borderRadius: 99,
+    borderWidth: 1.5,
+    gap: 6,
+    maxWidth: 180,
+  },
+  chipDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    flexShrink: 0,
+  },
+  goalChipText: {
+    fontSize: Layout.fontSize.caption,
   },
   sheetInput: {
     fontSize: Layout.fontSize.body,
