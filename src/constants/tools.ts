@@ -1,14 +1,7 @@
 import { ToolDefinition, BreathingPreset, DeadlineReminderType } from '../types';
 
 export const TOOL_REGISTRY: ToolDefinition[] = [
-  {
-    id: 'memento-mori',
-    name: 'Memento Mori',
-    tagline: 'Remember your mortality',
-    icon: 'hourglass-outline',
-    description:
-      'Visualize your life in weeks, months, and seasons. Set your birthday and life expectancy to see time in perspective.',
-  },
+
   {
     id: 'goals',
     name: 'Goals',
@@ -16,6 +9,14 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     icon: 'flag-outline',
     description:
       'Define up to 5 meaningful goals with outcomes, reasons, and consequences. Review them daily with an immersive reveal.',
+  },
+  {
+    id: 'priorities',
+    name: 'Priorities',
+    tagline: 'Focus on what matters',
+    icon: 'flag-outline',
+    description:
+      'Set up to 3 top priorities. They appear prominently on your home screen so you always know what matters most today.',
   },
   {
     id: 'identities',
@@ -26,12 +27,20 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
       'Create up to 3 identities — each with its own set of affirmations. Reinforce who you are every morning during Daily Priming.',
   },
   {
-    id: 'breathing',
-    name: 'Breathing Exercise',
-    tagline: 'Breathe with intention',
-    icon: 'leaf-outline',
+    id: 'events',
+    name: 'Events',
+    tagline: 'Mark what matters',
+    icon: 'gift-outline',
     description:
-      'Guided breathing exercises with multiple presets. Box breathing, 4-7-8 relaxation, and deep breathing.',
+      'Track birthdays, anniversaries, holidays and more. See upcoming events at a glance and count down to what matters most.',
+  },
+  {
+    id: 'lists',
+    name: 'Lists',
+    tagline: 'List of lists',
+    icon: 'list-outline',
+    description:
+      'Create and manage multiple to-do lists. Check items off, reorder them, and send any task to your daily checklist.',
   },
   {
     id: 'focus-timer',
@@ -66,6 +75,14 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
       'Create up to 5 custom routines with your own steps. Play through them one card at a time.',
   },
   {
+    id: 'breathing',
+    name: 'Breathing Exercise',
+    tagline: 'Breathe with intention',
+    icon: 'leaf-outline',
+    description:
+      'Guided breathing exercises with multiple presets. Box breathing, 4-7-8 relaxation, and deep breathing.',
+  },
+  {
     id: 'tally-counter',
     name: 'Tally Counter',
     tagline: 'Count what matters',
@@ -82,28 +99,12 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
       '100 curated motivational quotes from stoic philosophers, leaders, athletes, and thinkers. One quote at a time, full screen.',
   },
   {
-    id: 'events',
-    name: 'Events',
-    tagline: 'Mark what matters',
-    icon: 'gift-outline',
+    id: 'memento-mori',
+    name: 'Memento Mori',
+    tagline: 'Remember your mortality',
+    icon: 'hourglass-outline',
     description:
-      'Track birthdays, anniversaries, holidays and more. See upcoming events at a glance and count down to what matters most.',
-  },
-  {
-    id: 'lists',
-    name: 'Lists',
-    tagline: 'Organize anything',
-    icon: 'list-outline',
-    description:
-      'Create and manage multiple to-do lists. Check items off, reorder them, and send any task to your daily checklist.',
-  },
-  {
-    id: 'priorities',
-    name: 'Priorities',
-    tagline: 'Focus on what matters',
-    icon: 'flag-outline',
-    description:
-      'Set up to 3 top priorities. They appear prominently on your home screen so you always know what matters most today.',
+      'Visualize your life in weeks, months, and seasons. Set your birthday and life expectancy to see time in perspective.',
   },
 ];
 

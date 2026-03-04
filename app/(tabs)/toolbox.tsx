@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/components/useColorScheme';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
@@ -13,10 +14,11 @@ export default function ToolboxScreen() {
   const colors = Colors[colorScheme];
   const router = useRouter();
   const { isToolOnHome } = useTools();
+  const insets = useSafeAreaInsets();
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={styles.list}>
+      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 80 }]}>
         <View style={styles.group}>
           {TOOL_REGISTRY.map((tool, index) => (
             <ToolCard
@@ -40,7 +42,6 @@ const styles = StyleSheet.create({
   },
   list: {
     padding: Layout.spacing.md,
-    paddingBottom: Layout.spacing.xxl,
   },
   group: {
     borderRadius: Layout.borderRadius.md,

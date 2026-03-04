@@ -13,10 +13,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  Animated as RNAnimated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/components/useColorScheme';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
@@ -100,6 +102,79 @@ interface DragItem {
   date: Date;
   key: string;
 }
+
+// ─── Toast ───────────────────────────────────────────────────────────────────
+
+type ToastType = 'complete' | 'delete';
+
+function Toast({ visible, message, type }: { visible: boolean; message: string; type: ToastType }) {
+  const translateY = useRef(new RNAnimated.Value(-80)).current;
+  const opacity = useRef(new RNAnimated.Value(0)).current;
+  const isShowing = useRef(false);
+
+  useEffect(() => {
+    if (visible && !isShowing.current) {
+      isShowing.current = true;
+      translateY.setValue(-80);
+      opacity.setValue(0);
+      RNAnimated.parallel([
+        RNAnimated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 10 }),
+        RNAnimated.timing(opacity, { toValue: 1, duration: 150, useNativeDriver: true }),
+      ]).start();
+    } else if (!visible && isShowing.current) {
+      isShowing.current = false;
+      RNAnimated.parallel([
+        RNAnimated.timing(translateY, { toValue: -80, duration: 200, useNativeDriver: true }),
+        RNAnimated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [visible, translateY, opacity]);
+
+  const bg = type === 'complete' ? '#34C759' : '#FF3B30';
+  return (
+    <RNAnimated.View
+      pointerEvents="none"
+      style={[toastStyles.container, { transform: [{ translateY }], opacity, backgroundColor: bg }]}
+    >
+      <Text style={toastStyles.text}>{message}</Text>
+    </RNAnimated.View>
+  );
+}
+
+function useToast() {
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const show = useCallback((message: string, type: ToastType) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setToast({ message, type });
+    timerRef.current = setTimeout(() => setToast(null), 1000);
+  }, []);
+  return { toast, show };
+}
+
+const toastStyles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    top: 60,
+    left: 24,
+    right: 24,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    zIndex: 999,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  text: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+});
 
 // ─── Section header ──────────────────────────────────────────────────────────
 
@@ -373,6 +448,7 @@ interface TaskDetailModalProps {
   onDelete: (item: ChecklistItem, afterDelete: () => void) => void;
   onReschedule: (item: ChecklistItem, newDate: Date) => void;
   onUpdateItem: (item: ChecklistItem) => void;
+  onMarkComplete?: () => void;
 }
 
 function TaskDetailModal({
@@ -386,6 +462,7 @@ function TaskDetailModal({
   onDelete,
   onReschedule,
   onUpdateItem,
+  onMarkComplete,
 }: TaskDetailModalProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
@@ -459,6 +536,9 @@ function TaskDetailModal({
       onUpdateItem({ ...current.item, subtasks: newSubtasks });
     }
     onToggle(current.item, current.date);
+    if (!done) {
+      onMarkComplete?.();
+    }
   };
 
   return (
@@ -1043,6 +1123,7 @@ function TodayTab() {
   ], [todayPendingFiltered, todayCompletedWithPending, today]);
 
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
+  const { toast: checklistToast, show: showToast } = useToast();
 
   const handleFocusComplete = useCallback(
     (item: ChecklistItem, date: Date, elapsedSeconds: number) => {
@@ -1066,12 +1147,14 @@ function TodayTab() {
   const updateItemRef = useRef(updateItem);
   const allPendingEntriesRef = useRef(allPendingEntries);
   const allEntriesRef = useRef(allEntries);
+  const showToastRef = useRef(showToast);
   handleToggleRef.current = handleToggle;
   colorsRef.current = colors;
   moveToTrashRef.current = moveToTrash;
   updateItemRef.current = updateItem;
   allPendingEntriesRef.current = allPendingEntries;
   allEntriesRef.current = allEntries;
+  showToastRef.current = showToast;
 
   const [expandedSubtaskIds, setExpandedSubtaskIds] = useState<Set<string>>(new Set());
   const expandedSubtaskIdsRef = useRef(expandedSubtaskIds);
@@ -1121,6 +1204,7 @@ function TodayTab() {
                 }
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 moveToTrashRef.current(item.id, formatDate(new Date()));
+                showToastRef.current('Task deleted', 'delete');
               }
             }}
             overshootRight={false}
@@ -1298,6 +1382,7 @@ function TodayTab() {
                 onPress: () => {
                   moveToTrash(item.id, formatDate(new Date()));
                   afterDelete();
+                  showToast('Task deleted', 'delete');
                 },
               },
             ]);
@@ -1306,8 +1391,13 @@ function TodayTab() {
             updateItem({ ...item, recurrence: 'once', startDate: formatDate(newDate) });
           }}
           onUpdateItem={updateItem}
+          onMarkComplete={() => {
+            setDetailIndex(null);
+            showToast('Marked complete', 'complete');
+          }}
         />
       )}
+      <Toast visible={checklistToast !== null} message={checklistToast?.message ?? ''} type={checklistToast?.type ?? 'complete'} />
       <KeyboardAvoidingView
         style={styles.tabContent}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -1544,6 +1634,7 @@ function UpcomingTab() {
   allEntriesRef.current = allEntries;
 
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
+  const { toast: checklistToast, show: showToast } = useToast();
 
   const handleFocusComplete = useCallback(
     (item: ChecklistItem, date: Date, elapsedSeconds: number) => {
@@ -1558,9 +1649,11 @@ function UpcomingTab() {
   const colorsRef = useRef(colors);
   const updateItemRef = useRef(updateItem);
   const swipeableRefs = useRef<Map<string, { current: SwipeableMethods | null }>>(new Map());
+  const showToastRef = useRef(showToast);
   moveToTrashRef.current = moveToTrash;
   colorsRef.current = colors;
   updateItemRef.current = updateItem;
+  showToastRef.current = showToast;
 
   const [expandedSubtaskIds, setExpandedSubtaskIds] = useState<Set<string>>(new Set());
   const expandedSubtaskIdsRef = useRef(expandedSubtaskIds);
@@ -1602,6 +1695,7 @@ function UpcomingTab() {
                 }
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 moveToTrashRef.current(item.id, formatDate(new Date()));
+                showToastRef.current('Task deleted', 'delete');
               }
             }}
             overshootRight={false}
@@ -1793,6 +1887,7 @@ function UpcomingTab() {
                 onPress: () => {
                   moveToTrash(item.id, formatDate(new Date()));
                   afterDelete();
+                  showToast('Task deleted', 'delete');
                 },
               },
             ]);
@@ -1801,8 +1896,13 @@ function UpcomingTab() {
             updateItem({ ...item, recurrence: 'once', startDate: formatDate(newDate) });
           }}
           onUpdateItem={updateItem}
+          onMarkComplete={() => {
+            setDetailIndex(null);
+            showToast('Marked complete', 'complete');
+          }}
         />
       )}
+      <Toast visible={checklistToast !== null} message={checklistToast?.message ?? ''} type={checklistToast?.type ?? 'complete'} />
       <ScrollView style={styles.tabContent} contentContainerStyle={styles.listContent}>
         {tomorrowPendingItems.length > 0 && (
           <DraggableSection
@@ -1996,6 +2096,7 @@ function OverdueTab() {
   allEntriesRef.current = allEntries;
 
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
+  const { toast: checklistToast, show: showToast } = useToast();
 
   const handleFocusComplete = useCallback(
     (item: ChecklistItem, date: Date, elapsedSeconds: number) => {
@@ -2010,9 +2111,11 @@ function OverdueTab() {
   const colorsRef = useRef(colors);
   const updateItemRef = useRef(updateItem);
   const swipeableRefs = useRef<Map<string, { current: SwipeableMethods | null }>>(new Map());
+  const showToastRef = useRef(showToast);
   moveToTrashRef.current = moveToTrash;
   colorsRef.current = colors;
   updateItemRef.current = updateItem;
+  showToastRef.current = showToast;
 
   const [expandedSubtaskIds, setExpandedSubtaskIds] = useState<Set<string>>(new Set());
   const expandedSubtaskIdsRef = useRef(expandedSubtaskIds);
@@ -2054,6 +2157,7 @@ function OverdueTab() {
                 }
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 moveToTrashRef.current(item.id, formatDate(new Date()));
+                showToastRef.current('Task deleted', 'delete');
               }
             }}
             overshootRight={false}
@@ -2245,6 +2349,7 @@ function OverdueTab() {
                 onPress: () => {
                   moveToTrash(item.id, formatDate(new Date()));
                   afterDelete();
+                  showToast('Task deleted', 'delete');
                 },
               },
             ]);
@@ -2253,8 +2358,13 @@ function OverdueTab() {
             updateItem({ ...item, recurrence: 'once', startDate: formatDate(newDate) });
           }}
           onUpdateItem={updateItem}
+          onMarkComplete={() => {
+            setDetailIndex(null);
+            showToast('Marked complete', 'complete');
+          }}
         />
       )}
+      <Toast visible={checklistToast !== null} message={checklistToast?.message ?? ''} type={checklistToast?.type ?? 'complete'} />
       <ScrollView style={styles.tabContent} contentContainerStyle={styles.listContent}>
         {yesterdayPendingItems.length > 0 && (
           <DraggableSection
@@ -2653,6 +2763,8 @@ export default function ChecklistScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const fabBottom = insets.bottom + 70;
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState<TabId>('today');
   const [activeView, setActiveView] = useState<ViewId>('tasks');
@@ -2771,12 +2883,12 @@ export default function ChecklistScreen() {
 
       {/* FAB — hidden on trash */}
       {activeView !== 'trash' && (
-        <TouchableOpacity
-          style={[styles.fab, { backgroundColor: colors.tint }]}
+        <Pressable
+          style={[styles.fab, { backgroundColor: colors.tint, bottom: fabBottom }]}
           onPress={fabAction}
         >
           <Ionicons name="add" size={28} color="#fff" />
-        </TouchableOpacity>
+        </Pressable>
       )}
     </View>
   );
@@ -3035,17 +3147,16 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: Layout.spacing.lg,
     right: Layout.spacing.lg,
     width: 56,
     height: 56,
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 4,
+    elevation: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
   },
 });

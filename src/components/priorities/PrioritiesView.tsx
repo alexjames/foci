@@ -10,6 +10,7 @@ import {
   Platform,
   Alert,
   ScrollView,
+  Animated,
 } from 'react-native';
 import { useColorScheme } from '@/components/useColorScheme';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,60 @@ import { Layout } from '@/src/constants/Layout';
 import { Priority, PrioritiesConfig } from '@/src/types';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
 import { useAppContext } from '@/src/context/AppContext';
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+
+type ToastType = 'complete' | 'delete';
+
+function Toast({ message, type, visible }: { message: string; type: ToastType; visible: boolean }) {
+  const translateY = useRef(new Animated.Value(-80)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.spring(translateY, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 200 }),
+        Animated.timing(opacity, { toValue: 1, duration: 150, useNativeDriver: true }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(translateY, { toValue: -80, duration: 200, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [visible]);
+
+  const bg = type === 'complete' ? '#34C759' : '#FF3B30';
+  const icon = type === 'complete' ? 'checkmark-circle' : 'trash';
+
+  return (
+    <Animated.View
+      style={[
+        styles.toast,
+        { backgroundColor: bg, transform: [{ translateY }], opacity },
+      ]}
+      pointerEvents="none"
+    >
+      <Ionicons name={icon as any} size={16} color="#fff" />
+      <Text style={styles.toastText}>{message}</Text>
+    </Animated.View>
+  );
+}
+
+function useToast() {
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const show = useCallback((message: string, type: ToastType) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setToast({ message, type });
+    timerRef.current = setTimeout(() => setToast(null), 1000);
+  }, []);
+
+  return { toast, show };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const MAX_PRIORITIES = 3;
 const MAX_CHARS = 140;
@@ -141,6 +196,7 @@ function PriorityDetailSheet({
   onEdit,
   onComplete,
   onDelete,
+  showToast,
 }: {
   priority: Priority | null;
   rank: number;
@@ -149,8 +205,9 @@ function PriorityDetailSheet({
   visible: boolean;
   onClose: () => void;
   onEdit: () => void;
-  onComplete: (id: string, text: string) => void;
-  onDelete: (id: string, text: string) => void;
+  onComplete: (id: string) => void;
+  onDelete: (id: string) => void;
+  showToast: (message: string, type: ToastType) => void;
 }) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
@@ -189,7 +246,8 @@ function PriorityDetailSheet({
             style={[styles.sheetActionBtn, { backgroundColor: '#34C75922' }]}
             onPress={() => {
               onClose();
-              onComplete(priority.id, priority.text);
+              onComplete(priority.id);
+              showToast('Marked complete', 'complete');
             }}
           >
             <Ionicons name="checkmark-circle-outline" size={20} color="#34C759" />
@@ -199,7 +257,8 @@ function PriorityDetailSheet({
             style={[styles.sheetActionBtn, { backgroundColor: colors.destructive + '18' }]}
             onPress={() => {
               onClose();
-              onDelete(priority.id, priority.text);
+              onDelete(priority.id);
+              showToast('Priority deleted', 'delete');
             }}
           >
             <Ionicons name="trash-outline" size={20} color={colors.destructive} />
@@ -366,6 +425,7 @@ export function PrioritiesView() {
   const colors = Colors[colorScheme];
   const { config, setConfig } = useToolConfig<PrioritiesConfig>('priorities');
   const { state } = useAppContext();
+  const { toast, show } = useToast();
   const [modalVisible, setModalVisible] = useState(false);
   const [editingPriority, setEditingPriority] = useState<Priority | null>(null);
   const [selectedPriority, setSelectedPriority] = useState<Priority | null>(null);
@@ -406,6 +466,15 @@ export function PrioritiesView() {
     }
   };
 
+  const removePriority = useCallback(
+    (id: string) => {
+      const current = config ?? DEFAULT_CONFIG;
+      setConfig({ ...current, priorities: current.priorities.filter((p) => p.id !== id) });
+    },
+    [config, setConfig]
+  );
+
+  // Swipe complete — shows confirmation Alert, then toast
   const handleComplete = useCallback(
     (id: string, text: string) => {
       Alert.alert('Mark Complete', `Mark "${text.length > 60 ? text.slice(0, 60) + '…' : text}" as done?`, [
@@ -413,15 +482,16 @@ export function PrioritiesView() {
         {
           text: 'Complete',
           onPress: () => {
-            const current = config ?? DEFAULT_CONFIG;
-            setConfig({ ...current, priorities: current.priorities.filter((p) => p.id !== id) });
+            removePriority(id);
+            show('Marked complete', 'complete');
           },
         },
       ]);
     },
-    [config, setConfig]
+    [removePriority, show]
   );
 
+  // Swipe delete — shows confirmation Alert, then toast
   const handleDelete = useCallback(
     (id: string, text: string) => {
       Alert.alert('Delete Priority', `Delete "${text.length > 60 ? text.slice(0, 60) + '…' : text}"?`, [
@@ -430,13 +500,13 @@ export function PrioritiesView() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            const current = config ?? DEFAULT_CONFIG;
-            setConfig({ ...current, priorities: current.priorities.filter((p) => p.id !== id) });
+            removePriority(id);
+            show('Priority deleted', 'delete');
           },
         },
       ]);
     },
-    [config, setConfig]
+    [removePriority, show]
   );
 
   const handleDragEnd = useCallback(
@@ -534,11 +604,17 @@ export function PrioritiesView() {
             visible={selectedPriority !== null}
             onClose={() => setSelectedPriority(null)}
             onEdit={() => handleEdit(p!)}
-            onComplete={handleComplete}
-            onDelete={handleDelete}
+            onComplete={removePriority}
+            onDelete={removePriority}
+            showToast={show}
           />
         );
       })()}
+      <Toast
+        visible={toast !== null}
+        message={toast?.message ?? ''}
+        type={toast?.type ?? 'complete'}
+      />
     </View>
   );
 }
@@ -841,5 +917,29 @@ const styles = StyleSheet.create({
   sheetBtnText: {
     fontSize: Layout.fontSize.body,
     fontWeight: '600',
+  },
+  toast: {
+    position: 'absolute',
+    top: Layout.spacing.md,
+    left: Layout.spacing.lg,
+    right: Layout.spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.sm,
+    paddingHorizontal: Layout.spacing.md,
+    paddingVertical: 10,
+    borderRadius: Layout.borderRadius.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 6,
+    zIndex: 999,
+  },
+  toastText: {
+    color: '#fff',
+    fontSize: Layout.fontSize.body,
+    fontWeight: '600',
+    flex: 1,
   },
 });
