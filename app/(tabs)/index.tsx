@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   },
   dateHeader: {
     paddingHorizontal: Layout.spacing.lg,
-    paddingTop: Layout.spacing.lg,
+    paddingTop: Layout.spacing.xs,
     paddingBottom: Layout.spacing.md,
   },
   dateText: {
