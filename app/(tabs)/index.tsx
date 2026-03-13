@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   Animated,
   StyleSheet,
@@ -7,8 +7,11 @@ import {
   Pressable,
   ScrollView,
   useColorScheme,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/src/constants/Colors';
@@ -21,13 +24,44 @@ function formatDate(date: Date): string {
   return `${days[date.getDay()]}, ${months[date.getMonth()]} ${date.getDate()}`;
 }
 
+function todayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const dateText = useMemo(() => formatDate(new Date()), []);
+  const [refreshKey, setRefreshKey] = useState(() => todayKey());
+  const dateText = formatDate(new Date());
+
+  // Refresh on screen focus (navigate to tab or back to app)
+  useFocusEffect(
+    useCallback(() => {
+      setRefreshKey(todayKey());
+    }, [])
+  );
+
+  // Refresh when app comes back to foreground while on this screen
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'active') {
+        setRefreshKey(todayKey());
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Refresh at midnight if the screen stays open
+  useEffect(() => {
+    const now = new Date();
+    const msUntilMidnight =
+      new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime();
+    const timer = setTimeout(() => setRefreshKey(todayKey()), msUntilMidnight);
+    return () => clearTimeout(timer);
+  }, [refreshKey]);
 
   const [expanded, setExpanded] = useState(false);
   const expandAnim = useRef(new Animated.Value(0)).current;
@@ -81,7 +115,7 @@ export default function HomeScreen() {
         <View style={styles.dateHeader}>
           <Text style={[styles.dateText, { color: colors.secondaryText }]}>{dateText}</Text>
         </View>
-        <BriefingCard />
+        <BriefingCard key={refreshKey} />
       </ScrollView>
 
       {/* Backdrop — dismiss on tap outside */}
