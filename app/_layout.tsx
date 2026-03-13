@@ -67,6 +67,13 @@ function RootNavigator() {
           }}
         />
         <Stack.Screen
+          name="identity/[id]"
+          options={{
+            headerShown: false,
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
           name="tool-config/[toolId]"
           options={{
             headerShown: false,

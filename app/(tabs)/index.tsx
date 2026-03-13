@@ -93,9 +93,11 @@ export default function HomeScreen() {
       <View style={[styles.fabArea, { bottom: fabBottom }]}>
         {/* Action: Daily Priming */}
         <Animated.View style={[styles.actionRow, itemStyle(0)]}>
-          <Text style={[styles.actionLabel, { color: colors.text, backgroundColor: colors.cardBackground }]}>
-            Daily Priming
-          </Text>
+          <Pressable onPress={() => closeAndNavigate('/daily-priming')}>
+            <Text style={[styles.actionLabel, { color: colors.text, backgroundColor: colors.cardBackground }]}>
+              Daily Priming
+            </Text>
+          </Pressable>
           <Pressable
             onPress={() => closeAndNavigate('/daily-priming')}
             style={[styles.actionIcon, { backgroundColor: '#F97316' }]}
