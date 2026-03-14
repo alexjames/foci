@@ -27,7 +27,6 @@ import {
   EventRecurrence,
   IdentitiesConfig,
 } from '@/src/types';
-import { getTaskEmoji } from '@/src/utils/taskEmoji';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -268,7 +267,7 @@ export default function DailyPrimingScreen() {
         title: "Your To-Do's for the day",
         items: pendingTasks.map((t) => ({
           kind: 'text',
-          value: `${getTaskEmoji(t.title)}  ${t.title}`,
+          value: t.title,
         })),
       });
     }

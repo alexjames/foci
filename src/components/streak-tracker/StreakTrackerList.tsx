@@ -43,41 +43,6 @@ function getLast7Days(): Date[] {
   return days;
 }
 
-function getCurrentStreak(completionSet: Set<string>): number {
-  let count = 0;
-  const today = new Date();
-  const todayKey = toDateKey(today);
-  const cursor = new Date(today);
-  if (!completionSet.has(todayKey)) {
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  while (count < 3650) {
-    if (!completionSet.has(toDateKey(cursor))) break;
-    count++;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  return count;
-}
-
-function getLongestStreak(completionSet: Set<string>): number {
-  if (completionSet.size === 0) return 0;
-  const sorted = Array.from(completionSet).sort();
-  let longest = 1;
-  let current = 1;
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = new Date(sorted[i - 1]);
-    const curr = new Date(sorted[i]);
-    const diff = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
-    if (diff === 1) {
-      current++;
-      if (current > longest) longest = current;
-    } else {
-      current = 1;
-    }
-  }
-  return longest;
-}
-
 function getHabitColor(colorId: string | undefined, scheme: 'light' | 'dark'): string {
   const found = DEADLINE_COLORS.find((c) => c.id === colorId);
   if (found) return scheme === 'dark' ? found.dark : found.light;
@@ -335,7 +300,6 @@ function SwipeableHabitCard({
   const swipeableRef = React.useRef<Swipeable>(null);
   const accentColor = getHabitColor(habit.color, scheme);
   const completionSet = useMemo(() => new Set(habit.completions), [habit.completions]);
-  const currentStreak = useMemo(() => getCurrentStreak(completionSet), [completionSet]);
   const last7 = useMemo(() => getLast7Days(), []);
   const todayKey = toDateKey(new Date());
 
@@ -369,11 +333,6 @@ function SwipeableHabitCard({
               <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
                 {habit.title}
               </Text>
-              {currentStreak > 0 && (
-                <Text style={[styles.cardStreak, { color: accentColor }]}>
-                  🔥 {currentStreak} day{currentStreak !== 1 ? 's' : ''}
-                </Text>
-              )}
               {habit.notificationEnabled && (
                 <Ionicons name="notifications-outline" size={12} color={colors.secondaryText} style={styles.notifIcon} />
               )}
@@ -561,7 +520,6 @@ const styles = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'center', paddingVertical: Layout.spacing.md, paddingLeft: Layout.spacing.md, paddingRight: Layout.spacing.sm, borderLeftWidth: 4, gap: Layout.spacing.sm },
   cardLeft: { flex: 1 },
   cardTitle: { fontSize: Layout.fontSize.body, fontWeight: '600' },
-  cardStreak: { fontSize: Layout.fontSize.caption, marginTop: 2 },
   notifIcon: { marginTop: 4 },
   dragHandle: { opacity: 0.4 },
 

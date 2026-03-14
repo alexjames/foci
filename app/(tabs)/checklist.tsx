@@ -38,7 +38,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { getTaskEmoji } from '@/src/utils/taskEmoji';
 import { useLists } from '@/src/hooks/useLists';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -1246,7 +1245,7 @@ function TodayTab() {
                       style={[styles.itemTitle, { color: colors.text }]}
                       numberOfLines={1}
                     >
-                      {getTaskEmoji(item.title)} {item.title}
+                      {item.title}
                     </Text>
                     {!isActive && !expanded && hasSubtasks && (
                       <View style={styles.subtaskPill}>
@@ -1489,7 +1488,7 @@ function TodayTab() {
                         { color: colors.secondaryText, textDecorationLine: 'line-through' },
                       ]}
                     >
-                      {getTaskEmoji(item.title)} {item.title}
+                      {item.title}
                     </Text>
                   </Pressable>
                 </View>
@@ -1740,7 +1739,7 @@ function UpcomingTab() {
                 >
                   <View style={styles.itemTitleBlock}>
                     <Text style={[styles.itemTitle, { color: c.text }]} numberOfLines={1}>
-                      {getTaskEmoji(item.title)} {item.title}
+                      {item.title}
                     </Text>
                     {!isActive && !expanded && hasSubtasks && (
                       <View style={styles.subtaskPill}>
@@ -1956,7 +1955,7 @@ function UpcomingTab() {
                   }}
                 >
                   <Text style={[styles.itemTitle, { color: colors.secondaryText, textDecorationLine: 'line-through' }]}>
-                    {getTaskEmoji(item.title)} {item.title}
+                    {item.title}
                   </Text>
                 </Pressable>
               </View>
@@ -2202,7 +2201,7 @@ function OverdueTab() {
                 >
                   <View style={styles.itemTitleBlock}>
                     <Text style={[styles.itemTitle, { color: c.text }]} numberOfLines={1}>
-                      {getTaskEmoji(item.title)} {item.title}
+                      {item.title}
                     </Text>
                     {!isActive && !expanded && hasSubtasks && (
                       <View style={styles.subtaskPill}>
@@ -2418,7 +2417,7 @@ function OverdueTab() {
                   }}
                 >
                   <Text style={[styles.itemTitle, { color: colors.secondaryText, textDecorationLine: 'line-through' }]}>
-                    {getTaskEmoji(item.title)} {item.title}
+                    {item.title}
                   </Text>
                 </Pressable>
               </View>
@@ -2511,7 +2510,7 @@ function RecurringView() {
             <Ionicons name="repeat-outline" size={18} color={colors.secondaryText} />
             <View style={styles.itemExpandBlock}>
               <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
-                {getTaskEmoji(item.title)} {item.title}
+                {item.title}
               </Text>
               <Text style={[viewStyles.recurLabel, { color: colors.secondaryText }]}>
                 {recurrenceLabel(item)}
@@ -2576,7 +2575,7 @@ function TemplatesView() {
             <Ionicons name="copy-outline" size={18} color={colors.secondaryText} />
             <View style={styles.itemExpandBlock}>
               <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
-                {getTaskEmoji(item.title)} {item.title}
+                {item.title}
               </Text>
               {(item.subtasks?.length ?? 0) > 0 && (
                 <Text style={[viewStyles.recurLabel, { color: colors.secondaryText }]}>
@@ -2674,7 +2673,7 @@ function TrashView() {
             <Ionicons name="checkmark-circle" size={22} color={colors.secondaryText} style={{ opacity: 0.5 }} />
             <View style={styles.itemExpandBlock}>
               <Text style={[styles.itemTitle, { color: colors.secondaryText, textDecorationLine: 'line-through' }]} numberOfLines={1}>
-                {getTaskEmoji(item.title)} {item.title}
+                {item.title}
               </Text>
               <Text style={[viewStyles.recurLabel, { color: colors.secondaryText }]}>
                 {timeAgoLabel(item.trashedAt!)}

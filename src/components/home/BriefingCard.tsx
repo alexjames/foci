@@ -20,7 +20,6 @@ import {
   PrioritiesConfig, Priority,
 } from '@/src/types';
 import { DEADLINE_COLORS } from '@/src/constants/tools';
-import { getTaskEmoji } from '@/src/utils/taskEmoji';
 
 const CAP = 3;
 
@@ -135,22 +134,6 @@ function getLast7Days(): Date[] {
   return days;
 }
 
-function getCurrentStreak(completionSet: Set<string>): number {
-  let count = 0;
-  const today = new Date();
-  const todayKey = toDateKey(today);
-  const cursor = new Date(today);
-  if (!completionSet.has(todayKey)) {
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  while (count < 3650) {
-    if (!completionSet.has(toDateKey(cursor))) break;
-    count++;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  return count;
-}
-
 function getHabitColor(colorId: string | undefined, scheme: 'light' | 'dark'): string {
   const found = DEADLINE_COLORS.find((c) => c.id === colorId);
   if (found) return scheme === 'dark' ? found.dark : found.light;
@@ -251,7 +234,7 @@ function TasksSection({
               style={[styles.circleCheckbox, { borderColor: colors.secondaryText }]}
             />
             <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
-              {getTaskEmoji(item.title)} {item.title}
+              {item.title}
             </Text>
           </View>
         ))}
@@ -404,7 +387,6 @@ function HabitRow({
   const colors = Colors[scheme];
   const accentColor = getHabitColor(habit.color, scheme);
   const completionSet = useMemo(() => new Set(habit.completions), [habit.completions]);
-  const currentStreak = useMemo(() => getCurrentStreak(completionSet), [completionSet]);
   const last7 = useMemo(() => getLast7Days(), []);
   const todayKey = toDateKey(new Date());
 
@@ -412,11 +394,6 @@ function HabitRow({
     <View style={[styles.itemRow, styles.habitRow, { backgroundColor: colors.background, borderLeftColor: accentColor }]}>
       <View style={styles.itemFlex}>
         <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>{habit.title}</Text>
-        {currentStreak > 0 && (
-          <Text style={[styles.itemSub, { color: accentColor }]}>
-            🔥 {currentStreak} day{currentStreak !== 1 ? 's' : ''}
-          </Text>
-        )}
       </View>
       <View style={styles.dayRow}>
         {last7.map((d) => {

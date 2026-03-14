@@ -161,37 +161,9 @@ function StreakTrackerPreview() {
     );
   }
 
-  // Find habit with highest current streak
-  const toDateKey = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
-  const getStreak = (completions: string[]) => {
-    const set = new Set(completions);
-    const today = new Date();
-    const todayKey = toDateKey(today);
-    let count = 0;
-    const cursor = new Date(today);
-    if (!set.has(todayKey)) cursor.setDate(cursor.getDate() - 1);
-    while (count < 3650) {
-      if (!set.has(toDateKey(cursor))) break;
-      count++;
-      cursor.setDate(cursor.getDate() - 1);
-    }
-    return count;
-  };
-
-  const bestStreak = habits.reduce((best, h) => {
-    const s = getStreak(h.completions);
-    return s > best.streak ? { title: h.title, streak: s } : best;
-  }, { title: '', streak: 0 });
-
   return (
     <Text style={[styles.previewText, { color: colors.secondaryText }]}>
       {habits.length} habit{habits.length !== 1 ? 's' : ''}
-      {bestStreak.streak > 0 ? ` · Best: ${bestStreak.title} (🔥 ${bestStreak.streak}d)` : ''}
     </Text>
   );
 }
