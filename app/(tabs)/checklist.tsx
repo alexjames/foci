@@ -30,9 +30,6 @@ import DraggableFlatList, {
 } from 'react-native-draggable-flatlist';
 import Swipeable, { SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useLists } from '@/src/hooks/useLists';
-import { FocusTimerSession, formatTime as formatFocusTime } from '@/src/components/focus-timer/FocusTimerSession';
-import { useToolConfig } from '@/src/hooks/useToolConfig';
-import { FocusTimerConfig } from '@/src/types';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -282,9 +279,8 @@ function TaskDetailModal({
 }: TaskDetailModalProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
-  const { config: focusConfig } = useToolConfig<FocusTimerConfig>('focus-timer');
+  const router = useRouter();
   const [index, setIndex] = useState(initialIndex);
-  const [focusItem, setFocusItem] = useState<DetailEntry | null>(null);
   const [subtaskInput, setSubtaskInput] = useState('');
   const [showSubtaskInput, setShowSubtaskInput] = useState(false);
   const subtaskInputRef = useRef<TextInput>(null);
@@ -360,31 +356,6 @@ function TaskDetailModal({
 
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      {focusItem && (
-        <FocusTimerSession
-          taskTitle={focusItem.item.title}
-          taskDurationSeconds={focusConfig?.lastDurationSeconds}
-          onTaskDismiss={() => setFocusItem(null)}
-          onTaskComplete={(elapsed) => {
-            const item = focusItem;
-            setFocusItem(null);
-            Alert.alert(
-              'Session complete',
-              `You focused for ${formatFocusTime(elapsed)} on this task. Mark it as complete?`,
-              [
-                { text: 'Not yet', style: 'cancel' },
-                {
-                  text: 'Mark complete',
-                  onPress: () => {
-                    onFocusComplete(item.item, item.date, elapsed);
-                  },
-                },
-              ]
-            );
-          }}
-        />
-      )}
-
       <View style={detailStyles.sheet}>
         {/* Header */}
         <View style={detailStyles.header}>
@@ -575,7 +546,18 @@ function TaskDetailModal({
         <View style={detailStyles.actions}>
           <Pressable
             style={[detailStyles.focusBtn, { backgroundColor: colors.tint }]}
-            onPress={() => setFocusItem(current)}
+            onPress={() => {
+              onClose();
+              router.push({
+                pathname: '/tool/[toolId]',
+                params: {
+                  toolId: 'focus-timer',
+                  taskTitle: current.item.title,
+                  taskItemId: current.item.id,
+                  taskDateStr: formatDate(current.date),
+                },
+              });
+            }}
           >
             <Ionicons name="timer-outline" size={20} color="#fff" />
             <Text style={detailStyles.focusBtnText}>Start Focus</Text>

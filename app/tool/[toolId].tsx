@@ -25,6 +25,7 @@ import { EmptyState } from '@/src/components/EmptyState';
 
 // Focus Timer imports
 import { FocusTimerSession } from '@/src/components/focus-timer/FocusTimerSession';
+import { useChecklist } from '@/src/hooks/useChecklist';
 
 // Identities import
 import { IdentitiesList } from '@/src/components/identities/IdentitiesList';
@@ -216,6 +217,40 @@ function IdentitiesView() {
 }
 
 function FocusTimerView() {
+  const { taskTitle, taskItemId, taskDateStr } = useLocalSearchParams<{
+    taskTitle?: string;
+    taskItemId?: string;
+    taskDateStr?: string;
+  }>();
+  const router = useRouter();
+  const { toggleCompletion } = useChecklist();
+
+  if (taskTitle && taskItemId && taskDateStr) {
+    return (
+      <FocusTimerSession
+        taskTitle={taskTitle}
+        onTaskDismiss={() => router.back()}
+        onTaskComplete={(elapsed) => {
+          const date = new Date(taskDateStr);
+          Alert.alert(
+            'Session complete',
+            `You focused for ${Math.round(elapsed / 60)}m on this task. Mark it as complete?`,
+            [
+              { text: 'Not yet', style: 'cancel', onPress: () => router.back() },
+              {
+                text: 'Mark complete',
+                onPress: () => {
+                  toggleCompletion(taskItemId, date);
+                  router.back();
+                },
+              },
+            ]
+          );
+        }}
+      />
+    );
+  }
+
   return <FocusTimerSession />;
 }
 

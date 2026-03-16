@@ -25,6 +25,7 @@ import { FOCUS_TIMER_PRESETS } from '@/src/constants/tools';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
 import { DurationPicker } from './DurationPicker';
 import Svg, { Circle } from 'react-native-svg';
+import { startFocusLiveActivity, stopFocusLiveActivity } from '@/src/utils/liveActivity';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -106,16 +107,17 @@ export function FocusTimerSession({
   const taskMode = !!taskTitle;
   const initialDuration = taskMode ? (taskDurationSeconds ?? savedDuration) : savedDuration;
 
-  const [phase, setPhase] = useState<TimerPhase>(() => taskMode ? 'running' : 'idle');
+  const [phase, setPhase] = useState<TimerPhase>('idle');
   const [remaining, setRemaining] = useState(initialDuration);
   const [totalDuration, setTotalDuration] = useState(initialDuration);
-  const [showFullScreen, setShowFullScreen] = useState(taskMode);
+  const [showFullScreen, setShowFullScreen] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const notifIdRef = useRef<string | null>(null);
+  const liveActivityIdRef = useRef<string | null>(null);
   const startWallTimeRef = useRef<number>(0);
   const startRemainingRef = useRef<number>(initialDuration);
-  const progress = useSharedValue(taskMode ? 0 : 0);
+  const progress = useSharedValue(0);
 
   // Sync remaining when config changes while idle (standalone mode only)
   useEffect(() => {
@@ -138,16 +140,10 @@ export function FocusTimerSession({
   // Update progress ring
   useEffect(() => {
     if (totalDuration > 0) {
-      if (taskMode && phase === 'running') {
-        // In task mode, spin continuously (one rotation per minute)
-        const pct = ((totalDuration - remaining) % 60) / 60;
-        progress.value = withTiming(pct, { duration: 900, easing: Easing.linear });
-      } else {
-        const pct = 1 - remaining / totalDuration;
-        progress.value = withTiming(pct, { duration: 900, easing: Easing.linear });
-      }
+      const pct = 1 - remaining / totalDuration;
+      progress.value = withTiming(pct, { duration: 900, easing: Easing.linear });
     }
-  }, [remaining, totalDuration, taskMode, phase]);
+  }, [remaining, totalDuration]);
 
   // Detect timer completion
   useEffect(() => {
@@ -155,6 +151,8 @@ export function FocusTimerSession({
       fireAlarm(alarmType);
       cancelTimerNotification(notifIdRef.current);
       notifIdRef.current = null;
+      stopFocusLiveActivity(liveActivityIdRef.current);
+      liveActivityIdRef.current = null;
       if (phase === 'running') {
         if (taskMode) {
           setPhase('done');
@@ -199,31 +197,24 @@ export function FocusTimerSession({
     startWallTimeRef.current = Date.now();
     startRemainingRef.current = seconds;
     timerRef.current = setInterval(tick, 1000);
-    // Schedule background notification
+    // Schedule background notification + Live Activity
     const label = taskTitle ?? 'Focus session';
     scheduleTimerNotification('Foci', `${label} complete!`, seconds).then((id) => {
       notifIdRef.current = id;
     });
+    const endTimeMs = Date.now() + seconds * 1000;
+    startFocusLiveActivity(label, endTimeMs).then((id) => {
+      liveActivityIdRef.current = id;
+    });
   }, [tick, taskTitle]);
 
-  // In task mode, start immediately on mount
   useEffect(() => {
-    if (taskMode) {
-      activateKeepAwakeAsync();
-      startWallTimeRef.current = Date.now();
-      startRemainingRef.current = initialDuration;
-      timerRef.current = setInterval(tick, 1000);
-      const label = taskTitle ?? 'Focus session';
-      scheduleTimerNotification('Foci', `${label} complete!`, initialDuration).then((id) => {
-        notifIdRef.current = id;
-      });
-    }
     return () => {
       clearInterval(timerRef.current);
       deactivateKeepAwake();
       cancelTimerNotification(notifIdRef.current);
+      stopFocusLiveActivity(liveActivityIdRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleStart = () => {
@@ -238,6 +229,8 @@ export function FocusTimerSession({
     clearInterval(timerRef.current);
     cancelTimerNotification(notifIdRef.current);
     notifIdRef.current = null;
+    stopFocusLiveActivity(liveActivityIdRef.current);
+    liveActivityIdRef.current = null;
     setPhase(phase === 'break-running' ? 'break-paused' : 'paused');
     deactivateKeepAwake();
   };
@@ -253,12 +246,18 @@ export function FocusTimerSession({
     scheduleTimerNotification('Foci', `${label} complete!`, remaining).then((id) => {
       notifIdRef.current = id;
     });
+    const endTimeMs = Date.now() + remaining * 1000;
+    startFocusLiveActivity(label, endTimeMs).then((id) => {
+      liveActivityIdRef.current = id;
+    });
   };
 
   const handleReset = () => {
     clearInterval(timerRef.current);
     cancelTimerNotification(notifIdRef.current);
     notifIdRef.current = null;
+    stopFocusLiveActivity(liveActivityIdRef.current);
+    liveActivityIdRef.current = null;
     deactivateKeepAwake();
     if (taskMode) {
       onTaskDismiss?.();
@@ -302,13 +301,6 @@ export function FocusTimerSession({
   const isRunning = phase === 'running' || phase === 'break-running';
   const isPaused = phase === 'paused' || phase === 'break-paused';
 
-  // Label inside ring
-  const ringLabel = taskMode
-    ? phase === 'running' || phase === 'paused'
-      ? formatTime(remaining)
-      : formatTime(remaining)
-    : formatTime(remaining);
-
   const fullScreenModal = (
     <Modal visible={showFullScreen} animationType="fade" statusBarTranslucent>
       <StatusBar barStyle="light-content" />
@@ -344,12 +336,9 @@ export function FocusTimerSession({
             />
           </Svg>
           <View style={styles.timeOverlay}>
-            <Text style={styles.fullScreenTime}>{ringLabel}</Text>
+            <Text style={styles.fullScreenTime}>{formatTime(remaining)}</Text>
             {phase.startsWith('break') && (
               <Text style={styles.phaseLabel}>Break</Text>
-            )}
-            {taskMode && (phase === 'running' || phase === 'paused') && (
-              <Text style={styles.elapsedLabel}>remaining</Text>
             )}
           </View>
         </View>
@@ -399,12 +388,6 @@ export function FocusTimerSession({
     </Modal>
   );
 
-  // Task mode: just render the modal (no setup screen)
-  if (taskMode) {
-    return fullScreenModal;
-  }
-
-  // Standalone mode: setup screen + modal
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {fullScreenModal}
