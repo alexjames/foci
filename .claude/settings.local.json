@@ -10,7 +10,8 @@
       "Bash(python3:*)",
       "Bash(node -e:*)",
       "Bash(find:*)",
-      "Bash(wc -l /c/Users/darkm/Software/foci/app/'\\(tabs\\)'/checklist.tsx)"
+      "Bash(wc -l /c/Users/darkm/Software/foci/app/'\\(tabs\\)'/checklist.tsx)",
+      "Bash(grep -n \"useToolConfig\" /c/Users/darkm/Software/foci/src/hooks/*.ts)"
     ]
   }
 }

@@ -8,7 +8,6 @@ import {
   Pressable,
   TextInput,
   Modal,
-  StatusBar,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -30,22 +29,10 @@ import DraggableFlatList, {
   ScaleDecorator,
 } from 'react-native-draggable-flatlist';
 import Swipeable, { SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
-import Animated, {
-  useSharedValue,
-  useAnimatedProps,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
-import Svg, { Circle } from 'react-native-svg';
-import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useLists } from '@/src/hooks/useLists';
-
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-
-const RING_SIZE = 240;
-const STROKE_WIDTH = 6;
-const RADIUS = (RING_SIZE - STROKE_WIDTH) / 2;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+import { FocusTimerSession, formatTime as formatFocusTime } from '@/src/components/focus-timer/FocusTimerSession';
+import { useToolConfig } from '@/src/hooks/useToolConfig';
+import { FocusTimerConfig } from '@/src/types';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -83,13 +70,6 @@ function formatDuration(totalSeconds: number): string {
   return `${s}s`;
 }
 
-function formatTimerDisplay(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -266,169 +246,6 @@ function DraggableSection({
   );
 }
 
-// ─── Checklist Focus Timer ────────────────────────────────────────────────────
-
-interface ChecklistFocusTimerProps {
-  taskTitle: string;
-  onStop: (elapsedSeconds: number) => void;
-  onDismiss: () => void;
-}
-
-function ChecklistFocusTimer({ taskTitle, onStop, onDismiss }: ChecklistFocusTimerProps) {
-  const [elapsed, setElapsed] = useState(0);
-  const [running, setRunning] = useState(true);
-  const [paused, setPaused] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
-  const progress = useSharedValue(0);
-
-  // Spin the ring continuously while running — one full rotation per minute
-  useEffect(() => {
-    const pct = (elapsed % 60) / 60;
-    progress.value = withTiming(pct, { duration: 900, easing: Easing.linear });
-  }, [elapsed]);
-
-  const tick = useCallback(() => {
-    setElapsed((prev) => prev + 1);
-  }, []);
-
-  const handlePause = () => {
-    clearInterval(timerRef.current);
-    setPaused(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
-
-  const handleResume = () => {
-    setPaused(false);
-    timerRef.current = setInterval(tick, 1000);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
-
-  const handleStop = () => {
-    clearInterval(timerRef.current);
-    deactivateKeepAwake();
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onStop(elapsed);
-  };
-
-  useEffect(() => {
-    activateKeepAwakeAsync();
-    timerRef.current = setInterval(tick, 1000);
-    return () => {
-      clearInterval(timerRef.current);
-      deactivateKeepAwake();
-    };
-  }, []);
-
-  const animatedProps = useAnimatedProps(() => ({
-    strokeDashoffset: CIRCUMFERENCE * (1 - progress.value),
-  }));
-
-  return (
-    <Modal visible animationType="fade" statusBarTranslucent>
-      <StatusBar barStyle="light-content" />
-      <View style={timerStyles.screen}>
-        <Text style={timerStyles.taskTitle} numberOfLines={2}>{taskTitle}</Text>
-
-        <View style={timerStyles.ringContainer}>
-          <Svg width={RING_SIZE} height={RING_SIZE}>
-            <Circle
-              cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RADIUS}
-              stroke="#222" strokeWidth={STROKE_WIDTH} fill="none"
-            />
-            <AnimatedCircle
-              cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RADIUS}
-              stroke="#0A84FF" strokeWidth={STROKE_WIDTH} fill="none"
-              strokeDasharray={CIRCUMFERENCE}
-              animatedProps={animatedProps}
-              strokeLinecap="round"
-              rotation="-90"
-              origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
-            />
-          </Svg>
-          <View style={timerStyles.timeOverlay}>
-            <Text style={timerStyles.elapsed}>{formatTimerDisplay(elapsed)}</Text>
-            <Text style={timerStyles.elapsedLabel}>elapsed</Text>
-          </View>
-        </View>
-
-        <View style={timerStyles.controls}>
-          <Pressable onPress={handleStop} style={timerStyles.secondaryBtn}>
-            <Ionicons name="stop" size={22} color="#999" />
-          </Pressable>
-          <Pressable
-            onPress={paused ? handleResume : handlePause}
-            style={timerStyles.mainBtn}
-          >
-            <Ionicons name={paused ? 'play' : 'pause'} size={30} color="#fff" />
-          </Pressable>
-          <View style={{ width: 52 }} />
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-const timerStyles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#000',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Layout.spacing.xl,
-  },
-  taskTitle: {
-    fontSize: Layout.fontSize.heading,
-    fontWeight: '600',
-    color: '#fff',
-    textAlign: 'center',
-    marginBottom: 48,
-  },
-  ringContainer: {
-    width: RING_SIZE,
-    height: RING_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timeOverlay: {
-    position: 'absolute',
-    alignItems: 'center',
-  },
-  elapsed: {
-    fontSize: 52,
-    fontWeight: '200',
-    color: '#fff',
-    fontVariant: ['tabular-nums'],
-  },
-  elapsedLabel: {
-    fontSize: Layout.fontSize.caption,
-    color: '#666',
-    marginTop: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  controls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 60,
-    gap: Layout.spacing.xl,
-  },
-  mainBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#333',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
-
 // ─── Task Detail Card Modal ───────────────────────────────────────────────────
 
 interface DetailEntry {
@@ -465,6 +282,7 @@ function TaskDetailModal({
 }: TaskDetailModalProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
+  const { config: focusConfig } = useToolConfig<FocusTimerConfig>('focus-timer');
   const [index, setIndex] = useState(initialIndex);
   const [focusItem, setFocusItem] = useState<DetailEntry | null>(null);
   const [subtaskInput, setSubtaskInput] = useState('');
@@ -543,20 +361,22 @@ function TaskDetailModal({
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       {focusItem && (
-        <ChecklistFocusTimer
+        <FocusTimerSession
           taskTitle={focusItem.item.title}
-          onDismiss={() => setFocusItem(null)}
-          onStop={(elapsed) => {
+          taskDurationSeconds={focusConfig?.lastDurationSeconds}
+          onTaskDismiss={() => setFocusItem(null)}
+          onTaskComplete={(elapsed) => {
+            const item = focusItem;
             setFocusItem(null);
             Alert.alert(
               'Session complete',
-              `You spent ${formatDuration(elapsed)} on this task. Mark it as complete?`,
+              `You focused for ${formatFocusTime(elapsed)} on this task. Mark it as complete?`,
               [
                 { text: 'Not yet', style: 'cancel' },
                 {
                   text: 'Mark complete',
                   onPress: () => {
-                    onFocusComplete(focusItem.item, focusItem.date, elapsed);
+                    onFocusComplete(item.item, item.date, elapsed);
                   },
                 },
               ]
