@@ -190,6 +190,8 @@ export type RecurrenceType = 'once' | 'daily' | 'specific-days' | 'every-n-days'
 
 export type ChecklistItemKind = 'task' | 'recurring' | 'template';
 
+export type TaskDisplayAs = 'task' | 'deadline' | 'event';
+
 export interface Subtask {
   id: string;
   title: string;
@@ -207,6 +209,13 @@ export interface ChecklistItem {
   subtasks?: Subtask[];
   kind?: ChecklistItemKind; // undefined = 'task' for backward compat
   trashedAt?: string;       // YYYY-MM-DD, set when a once-task completes at EOD
+  // Display-as fields (populated when displayAs is 'deadline' or 'event')
+  displayAs?: TaskDisplayAs;
+  deadlineColor?: string;
+  deadlineReminders?: DeadlineReminderType[];
+  eventIcon?: string;
+  eventColor?: string;
+  eventRecurrence?: EventRecurrence;
   recurringRuleId?: string; // ID of the parent recurring rule item (for spawned instances)
   periodDate?: string;      // YYYY-MM-DD of the canonical period date this instance covers
 }

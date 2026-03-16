@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -20,6 +20,7 @@ import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
 import { DeadlineTrackerConfig, Deadline } from '@/src/types';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
+import { useChecklist } from '@/src/hooks/useChecklist';
 import { DEADLINE_COLORS } from '@/src/constants/tools';
 
 function getDeadlineColor(colorId: string | undefined, scheme: 'light' | 'dark'): string {
@@ -244,11 +245,13 @@ function DeadlineDetailSheet({
   visible,
   onClose,
   onComplete,
+  isTaskItem,
 }: {
   deadline: Deadline | null;
   visible: boolean;
   onClose: () => void;
   onComplete: (id: string, title: string) => void;
+  isTaskItem: boolean;
 }) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
@@ -277,7 +280,11 @@ function DeadlineDetailSheet({
 
   const handleConfigure = () => {
     onClose();
-    router.push(`/edit-deadline/${deadline.id}` as any);
+    if (isTaskItem) {
+      router.push(`/edit-checklist/${deadline.id}` as any);
+    } else {
+      router.push(`/edit-deadline/${deadline.id}` as any);
+    }
   };
 
   const handleComplete = () => {
@@ -366,37 +373,72 @@ export function DeadlineTrackerList({ sortMode = 'manual' }: { sortMode?: SortMo
   const colors = Colors[colorScheme];
   const router = useRouter();
   const { config, setConfig } = useToolConfig<DeadlineTrackerConfig>('deadline-tracker');
+  const { items: checklistItems } = useChecklist();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const deadlines = config?.deadlines ?? [];
 
-  const sortedDeadlines = React.useMemo(() => {
+  // Derive task-deadlines from checklist items
+  const taskDeadlineIds = useMemo(
+    () => new Set(checklistItems.filter((i) => i.displayAs === 'deadline' && !i.trashedAt && i.kind !== 'template' && i.recurrence === 'once').map((i) => i.id)),
+    [checklistItems]
+  );
+
+  const taskDeadlines = useMemo<Deadline[]>(
+    () =>
+      checklistItems
+        .filter((i) => taskDeadlineIds.has(i.id))
+        .map((i) => ({
+          id: i.id,
+          title: i.title,
+          date: new Date(i.startDate).toISOString(),
+          color: i.deadlineColor,
+          reminders: i.deadlineReminders ?? [],
+          createdAt: i.createdAt,
+        })),
+    [checklistItems, taskDeadlineIds]
+  );
+
+  const allDeadlines = useMemo(
+    () => [...deadlines, ...taskDeadlines],
+    [deadlines, taskDeadlines]
+  );
+
+  const sortedDeadlines = useMemo(() => {
     if (sortMode === 'date') {
-      return [...deadlines].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      return [...allDeadlines].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }
     if (sortMode === 'name') {
-      return [...deadlines].sort((a, b) => a.title.localeCompare(b.title));
+      return [...allDeadlines].sort((a, b) => a.title.localeCompare(b.title));
     }
-    return deadlines;
-  }, [deadlines, sortMode]);
+    return allDeadlines;
+  }, [allDeadlines, sortMode]);
   const canAdd = deadlines.length < 10;
 
-  const selectedDeadline = selectedId ? deadlines.find((d) => d.id === selectedId) ?? null : null;
+  const selectedDeadline = selectedId ? allDeadlines.find((d) => d.id === selectedId) ?? null : null;
 
   const removeDeadline = useCallback(
     (id: string) => {
+      if (taskDeadlineIds.has(id)) {
+        Alert.alert('Task Deadline', 'This deadline comes from a task. Edit or delete it from the Tasks screen.');
+        return;
+      }
       const current = config ?? DEFAULT_CONFIG;
       setConfig({
         ...current,
         deadlines: current.deadlines.filter((d) => d.id !== id),
       });
     },
-    [config, setConfig]
+    [config, setConfig, taskDeadlineIds]
   );
 
   const handleComplete = useCallback(
     (id: string, title: string) => {
+      if (taskDeadlineIds.has(id)) {
+        Alert.alert('Task Deadline', 'This deadline comes from a task. Manage it from the Tasks screen.');
+        return;
+      }
       Alert.alert('Complete Deadline', `Mark "${title}" as complete? This will remove it.`, [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -408,11 +450,15 @@ export function DeadlineTrackerList({ sortMode = 'manual' }: { sortMode?: SortMo
         },
       ]);
     },
-    [removeDeadline]
+    [removeDeadline, taskDeadlineIds]
   );
 
   const handleDelete = useCallback(
     (id: string, title: string) => {
+      if (taskDeadlineIds.has(id)) {
+        Alert.alert('Task Deadline', 'This deadline comes from a task. Edit or delete it from the Tasks screen.');
+        return;
+      }
       Alert.alert('Delete Deadline', `Delete "${title}"?`, [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -422,16 +468,17 @@ export function DeadlineTrackerList({ sortMode = 'manual' }: { sortMode?: SortMo
         },
       ]);
     },
-    [removeDeadline]
+    [removeDeadline, taskDeadlineIds]
   );
 
   const handleDragEnd = useCallback(
     ({ data }: { data: Deadline[] }) => {
       const current = config ?? DEFAULT_CONFIG;
-      setConfig({ ...current, deadlines: data });
+      // Only persist the non-task deadlines in the new order
+      setConfig({ ...current, deadlines: data.filter((d) => !taskDeadlineIds.has(d.id)) });
       setIsDragging(false);
     },
-    [config, setConfig]
+    [config, setConfig, taskDeadlineIds]
   );
 
   const renderItem = useCallback(
@@ -439,23 +486,25 @@ export function DeadlineTrackerList({ sortMode = 'manual' }: { sortMode?: SortMo
       <SwipeableDeadlineCard
         deadline={item}
         scheme={colorScheme}
-        showHandle={isDragging}
+        showHandle={isDragging && !taskDeadlineIds.has(item.id)}
         onCardPress={setSelectedId}
         onComplete={handleComplete}
         onDelete={handleDelete}
         drag={() => {
-          setIsDragging(true);
-          drag();
+          if (!taskDeadlineIds.has(item.id)) {
+            setIsDragging(true);
+            drag();
+          }
         }}
         isActive={isActive}
       />
     ),
-    [colorScheme, isDragging, handleComplete, handleDelete]
+    [colorScheme, isDragging, handleComplete, handleDelete, taskDeadlineIds]
   );
 
   return (
     <View style={styles.container}>
-      {deadlines.length === 0 ? (
+      {allDeadlines.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="calendar-outline" size={48} color={colors.secondaryText} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>No deadlines yet</Text>
@@ -496,6 +545,7 @@ export function DeadlineTrackerList({ sortMode = 'manual' }: { sortMode?: SortMo
         visible={selectedId !== null}
         onClose={() => setSelectedId(null)}
         onComplete={handleComplete}
+        isTaskItem={selectedId !== null && taskDeadlineIds.has(selectedId)}
       />
     </View>
   );

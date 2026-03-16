@@ -460,7 +460,7 @@ export function BriefingCard() {
   const priorities = prioritiesConfig?.priorities ?? [];
 
   // Tasks
-  const { getItemsForDate, isCompleted, toggleCompletion } = useChecklist();
+  const { items: checklistItems, getItemsForDate, isCompleted, toggleCompletion } = useChecklist();
   const today = useMemo(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -471,24 +471,57 @@ export function BriefingCard() {
     [todayItems, isCompleted, today]
   );
 
+  // Task-derived deadlines
+  const taskDeadlines = useMemo<Deadline[]>(
+    () =>
+      checklistItems
+        .filter((i) => i.displayAs === 'deadline' && !i.trashedAt && i.kind !== 'template' && i.recurrence === 'once')
+        .map((i) => ({
+          id: i.id,
+          title: i.title,
+          date: new Date(i.startDate).toISOString(),
+          color: i.deadlineColor,
+          reminders: i.deadlineReminders ?? [],
+          createdAt: i.createdAt,
+        })),
+    [checklistItems]
+  );
+
+  // Task-derived events
+  const taskEvents = useMemo<Event[]>(
+    () =>
+      checklistItems
+        .filter((i) => i.displayAs === 'event' && !i.trashedAt && i.kind !== 'template' && i.recurrence === 'once')
+        .map((i) => ({
+          id: i.id,
+          title: i.title,
+          date: new Date(i.startDate).toISOString(),
+          icon: i.eventIcon ?? 'calendar-outline',
+          color: i.eventColor,
+          recurrence: i.eventRecurrence ?? { type: 'none' },
+          createdAt: i.createdAt,
+        })),
+    [checklistItems]
+  );
+
   // Deadlines
   const { config: deadlineConfig } = useToolConfig<DeadlineTrackerConfig>('deadline-tracker');
   const upcomingDeadlines = useMemo(() => {
-    const deadlines = deadlineConfig?.deadlines ?? [];
-    return deadlines
+    const dedicated = deadlineConfig?.deadlines ?? [];
+    return [...dedicated, ...taskDeadlines]
       .filter((d) => getDaysUntilDeadline(d.date) >= 0)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [deadlineConfig]);
+  }, [deadlineConfig, taskDeadlines]);
 
   // Events
   const { config: eventsConfig } = useToolConfig<EventsConfig>('events');
   const upcomingEvents = useMemo(() => {
-    const events = eventsConfig?.events ?? [];
-    return events
+    const dedicated = eventsConfig?.events ?? [];
+    return [...dedicated, ...taskEvents]
       .map((e) => ({ ...e, daysUntil: getDaysUntilNextOccurrence(e.date, e.recurrence) }))
       .filter(({ daysUntil }) => daysUntil >= 0 && daysUntil <= 30)
       .sort((a, b) => a.daysUntil - b.daysUntil);
-  }, [eventsConfig]);
+  }, [eventsConfig, taskEvents]);
 
   // Routines
   const { config: routinesConfig } = useToolConfig<RoutinesConfig>('routines');

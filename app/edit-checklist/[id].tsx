@@ -18,7 +18,8 @@ import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-nativ
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
-import { ChecklistItemKind, RecurrenceType, Subtask } from '@/src/types';
+import { ChecklistItemKind, RecurrenceType, Subtask, TaskDisplayAs, DeadlineReminderType, EventRecurrence } from '@/src/types';
+import { DEADLINE_COLORS, DEADLINE_REMINDER_OPTIONS, EVENT_ICONS } from '@/src/constants/tools';
 import { useChecklist } from '@/src/hooks/useChecklist';
 import * as Haptics from 'expo-haptics';
 
@@ -171,6 +172,38 @@ export default function EditChecklistScreen() {
   const [subtaskInput, setSubtaskInput] = useState('');
   const subtaskInputRef = useRef<TextInput>(null);
 
+  // Display-as state
+  const [displayAs, setDisplayAs] = useState<TaskDisplayAs>(
+    existingItem?.displayAs ?? 'task'
+  );
+  // Deadline extra fields
+  const [deadlineColor, setDeadlineColor] = useState<string | undefined>(
+    existingItem?.deadlineColor
+  );
+  const [deadlineReminders, setDeadlineReminders] = useState<DeadlineReminderType[]>(
+    existingItem?.deadlineReminders ?? []
+  );
+  // Event extra fields
+  const [eventIcon, setEventIcon] = useState<string>(
+    existingItem?.eventIcon ?? 'calendar-outline'
+  );
+  const [eventColor, setEventColor] = useState<string | undefined>(
+    existingItem?.eventColor
+  );
+  const [eventRecurrenceType, setEventRecurrenceType] = useState<EventRecurrence['type']>(
+    existingItem?.eventRecurrence?.type ?? 'none'
+  );
+  const [everyXMonths, setEveryXMonths] = useState<string>(
+    existingItem?.eventRecurrence?.type === 'every-x-months'
+      ? String((existingItem.eventRecurrence as { type: 'every-x-months'; months: number }).months)
+      : '3'
+  );
+  const [everyXDaysEvent, setEveryXDaysEvent] = useState<string>(
+    existingItem?.eventRecurrence?.type === 'every-x-days'
+      ? String((existingItem.eventRecurrence as { type: 'every-x-days'; days: number }).days)
+      : '30'
+  );
+
   const addSubtask = useCallback(() => {
     const title = subtaskInput.trim();
     if (!title) return;
@@ -220,6 +253,25 @@ export default function EditChecklistScreen() {
     [colors]
   );
 
+  const buildEventRecurrence = (): EventRecurrence => {
+    switch (eventRecurrenceType) {
+      case 'annually': return { type: 'annually' };
+      case 'monthly': return { type: 'monthly' };
+      case 'every-x-months': return { type: 'every-x-months', months: Math.max(1, parseInt(everyXMonths) || 1) };
+      case 'every-x-days': return { type: 'every-x-days', days: Math.max(1, parseInt(everyXDaysEvent) || 1) };
+      default: return { type: 'none' };
+    }
+  };
+
+  const displayAsFields = () => ({
+    displayAs: displayAs === 'task' ? undefined : displayAs,
+    deadlineColor: displayAs === 'deadline' ? deadlineColor : undefined,
+    deadlineReminders: displayAs === 'deadline' ? deadlineReminders : undefined,
+    eventIcon: displayAs === 'event' ? eventIcon : undefined,
+    eventColor: displayAs === 'event' ? eventColor : undefined,
+    eventRecurrence: displayAs === 'event' ? buildEventRecurrence() : undefined,
+  });
+
   const handleSave = () => {
     const trimmed = title.trim();
     if (!trimmed) return;
@@ -262,6 +314,13 @@ export default function EditChecklistScreen() {
           specificDays: finalRecurrence === 'specific-days' ? specificDays : undefined,
           everyNDays: finalRecurrence === 'every-n-days' ? everyNDays : undefined,
           kind: undefined,
+          // Clear display-as fields for recurring tasks
+          displayAs: undefined,
+          deadlineColor: undefined,
+          deadlineReminders: undefined,
+          eventIcon: undefined,
+          eventColor: undefined,
+          eventRecurrence: undefined,
         });
       } else {
         addItem({
@@ -294,12 +353,14 @@ export default function EditChecklistScreen() {
           specificDays: undefined,
           everyNDays: undefined,
           kind: undefined,
+          ...displayAsFields(),
         });
       } else {
         addItem({
           title: trimmed,
           recurrence: 'once',
           startDate: formatDate(onceDate),
+          ...displayAsFields(),
         });
       }
     }
@@ -377,6 +438,34 @@ export default function EditChecklistScreen() {
           placeholderTextColor={colors.secondaryText}
           autoFocus={id === 'new'}
         />
+
+        {/* Type selector — hidden for templates, template-from, repeating tasks, and recurring instances */}
+        {!isEditingTemplate && !templateId && !repeats && !existingItem?.recurringRuleId && (
+          <>
+            <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>Type</Text>
+            <View style={[styles.segmentedControl, { backgroundColor: colors.cardBackground }]}>
+              {(['task', 'deadline', 'event'] as TaskDisplayAs[]).map((type) => (
+                <Pressable
+                  key={type}
+                  style={[
+                    styles.segment,
+                    displayAs === type && { backgroundColor: colors.tint },
+                  ]}
+                  onPress={() => setDisplayAs(type)}
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      { color: displayAs === type ? '#fff' : colors.secondaryText },
+                    ]}
+                  >
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        )}
 
         {/* Subtasks — only for templates */}
         {isEditingTemplate && (
@@ -492,6 +581,7 @@ export default function EditChecklistScreen() {
                   onValueChange={(val) => {
                     setRepeats(val);
                     setShowDatePicker(false);
+                    if (val) setDisplayAs('task');
                   }}
                   trackColor={{ true: colors.tint }}
                 />
@@ -566,6 +656,190 @@ export default function EditChecklistScreen() {
                 )}
               </>
             )}
+          </>
+        )}
+
+        {/* Deadline extra fields */}
+        {!isEditingTemplate && !templateId && !repeats && !existingItem?.recurringRuleId && displayAs === 'deadline' && (
+          <>
+            <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
+              Color (optional)
+            </Text>
+            <View style={styles.colorRow}>
+              <Pressable
+                onPress={() => setDeadlineColor(undefined)}
+                style={[
+                  styles.colorChip,
+                  { backgroundColor: colors.cardBackground, borderColor: colors.separator },
+                  !deadlineColor && { borderColor: colors.tint, borderWidth: 2 },
+                ]}
+              >
+                <Ionicons name="ban-outline" size={16} color={colors.secondaryText} />
+              </Pressable>
+              {DEADLINE_COLORS.map((c) => {
+                const chipColor = colorScheme === 'dark' ? c.dark : c.light;
+                return (
+                  <Pressable
+                    key={c.id}
+                    onPress={() => setDeadlineColor(c.id)}
+                    style={[
+                      styles.colorChip,
+                      { backgroundColor: chipColor },
+                      deadlineColor === c.id && { borderColor: colors.text, borderWidth: 2 },
+                    ]}
+                  />
+                );
+              })}
+            </View>
+
+            <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
+              Reminders (optional)
+            </Text>
+            {DEADLINE_REMINDER_OPTIONS.map((option) => (
+              <Pressable
+                key={option.value}
+                style={[
+                  styles.optionRow,
+                  { backgroundColor: colors.cardBackground },
+                  deadlineReminders.includes(option.value) && { borderColor: colors.tint, borderWidth: 2 },
+                ]}
+                onPress={() =>
+                  setDeadlineReminders((prev) =>
+                    prev.includes(option.value)
+                      ? prev.filter((r) => r !== option.value)
+                      : [...prev, option.value]
+                  )
+                }
+              >
+                <Text style={[styles.optionLabel, { color: colors.text }]}>{option.label}</Text>
+                {deadlineReminders.includes(option.value) && (
+                  <Ionicons name="checkmark-circle" size={20} color={colors.tint} />
+                )}
+              </Pressable>
+            ))}
+          </>
+        )}
+
+        {/* Event extra fields */}
+        {!isEditingTemplate && !templateId && !repeats && !existingItem?.recurringRuleId && displayAs === 'event' && (
+          <>
+            <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
+              Icon
+            </Text>
+            <View style={styles.iconGrid}>
+              {EVENT_ICONS.map((item) => {
+                const isSelected = eventIcon === item.icon;
+                return (
+                  <Pressable
+                    key={item.id}
+                    onPress={() => setEventIcon(item.icon)}
+                    style={[
+                      styles.iconChip,
+                      { backgroundColor: colors.cardBackground },
+                      isSelected && { borderColor: colors.tint, borderWidth: 2 },
+                    ]}
+                  >
+                    <Ionicons
+                      name={item.icon as any}
+                      size={22}
+                      color={isSelected ? colors.tint : colors.secondaryText}
+                    />
+                    <Text
+                      style={[
+                        styles.iconLabel,
+                        { color: isSelected ? colors.tint : colors.secondaryText },
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
+              Repeats
+            </Text>
+            {([
+              { type: 'none' as const, label: 'Does not repeat' },
+              { type: 'annually' as const, label: 'Annually' },
+              { type: 'monthly' as const, label: 'Same day every month' },
+              { type: 'every-x-months' as const, label: 'Every X months' },
+              { type: 'every-x-days' as const, label: 'Every X days' },
+            ]).map((option) => (
+              <Pressable
+                key={option.type}
+                style={[
+                  styles.optionRow,
+                  { backgroundColor: colors.cardBackground },
+                  eventRecurrenceType === option.type && { borderColor: colors.tint, borderWidth: 2 },
+                ]}
+                onPress={() => setEventRecurrenceType(option.type)}
+              >
+                <Text style={[styles.optionLabel, { color: colors.text }]}>{option.label}</Text>
+                {eventRecurrenceType === option.type && (
+                  <Ionicons name="checkmark-circle" size={20} color={colors.tint} />
+                )}
+              </Pressable>
+            ))}
+
+            {eventRecurrenceType === 'every-x-months' && (
+              <View style={[styles.xInputRow, { marginBottom: Layout.spacing.sm }]}>
+                <Text style={[styles.optionLabel, { color: colors.secondaryText }]}>Every</Text>
+                <TextInput
+                  style={[styles.xInput, { color: colors.text, backgroundColor: colors.cardBackground }]}
+                  value={everyXMonths}
+                  onChangeText={(v) => setEveryXMonths(v.replace(/[^0-9]/g, ''))}
+                  keyboardType="number-pad"
+                  maxLength={3}
+                />
+                <Text style={[styles.optionLabel, { color: colors.secondaryText }]}>months</Text>
+              </View>
+            )}
+
+            {eventRecurrenceType === 'every-x-days' && (
+              <View style={[styles.xInputRow, { marginBottom: Layout.spacing.sm }]}>
+                <Text style={[styles.optionLabel, { color: colors.secondaryText }]}>Every</Text>
+                <TextInput
+                  style={[styles.xInput, { color: colors.text, backgroundColor: colors.cardBackground }]}
+                  value={everyXDaysEvent}
+                  onChangeText={(v) => setEveryXDaysEvent(v.replace(/[^0-9]/g, ''))}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                />
+                <Text style={[styles.optionLabel, { color: colors.secondaryText }]}>days</Text>
+              </View>
+            )}
+
+            <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
+              Color (optional)
+            </Text>
+            <View style={styles.colorRow}>
+              <Pressable
+                onPress={() => setEventColor(undefined)}
+                style={[
+                  styles.colorChip,
+                  { backgroundColor: colors.cardBackground, borderColor: colors.separator },
+                  !eventColor && { borderColor: colors.tint, borderWidth: 2 },
+                ]}
+              >
+                <Ionicons name="ban-outline" size={16} color={colors.secondaryText} />
+              </Pressable>
+              {DEADLINE_COLORS.map((c) => {
+                const chipColor = colorScheme === 'dark' ? c.dark : c.light;
+                return (
+                  <Pressable
+                    key={c.id}
+                    onPress={() => setEventColor(c.id)}
+                    style={[
+                      styles.colorChip,
+                      { backgroundColor: chipColor },
+                      eventColor === c.id && { borderColor: colors.text, borderWidth: 2 },
+                    ]}
+                  />
+                );
+              })}
+            </View>
           </>
         )}
 
@@ -722,5 +996,68 @@ const styles = StyleSheet.create({
   deleteText: {
     fontSize: Layout.fontSize.body,
     fontWeight: '500',
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    borderRadius: Layout.borderRadius.md,
+    padding: 3,
+    gap: 3,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: Layout.spacing.sm,
+    alignItems: 'center',
+    borderRadius: Layout.borderRadius.sm,
+  },
+  segmentText: {
+    fontSize: Layout.fontSize.caption,
+    fontWeight: '600',
+  },
+  colorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Layout.spacing.sm,
+  },
+  colorChip: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  iconGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Layout.spacing.sm,
+  },
+  iconChip: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Layout.spacing.sm,
+    paddingHorizontal: Layout.spacing.sm,
+    borderRadius: Layout.borderRadius.md,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    minWidth: 64,
+    gap: 4,
+  },
+  iconLabel: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  xInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.sm,
+    paddingHorizontal: Layout.spacing.xs,
+  },
+  xInput: {
+    fontSize: Layout.fontSize.body,
+    padding: Layout.spacing.sm,
+    borderRadius: Layout.borderRadius.md,
+    minWidth: 60,
+    textAlign: 'center',
   },
 });

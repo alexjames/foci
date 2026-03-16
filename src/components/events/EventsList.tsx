@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -20,6 +20,7 @@ import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
 import { EventsConfig, Event, EventRecurrence } from '@/src/types';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
+import { useChecklist } from '@/src/hooks/useChecklist';
 import { DEADLINE_COLORS } from '@/src/constants/tools';
 
 function getEventColor(colorId: string | undefined, scheme: 'light' | 'dark'): string {
@@ -235,10 +236,12 @@ function EventDetailSheet({
   event,
   visible,
   onClose,
+  isTaskItem,
 }: {
   event: Event | null;
   visible: boolean;
   onClose: () => void;
+  isTaskItem: boolean;
 }) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
@@ -264,7 +267,11 @@ function EventDetailSheet({
 
   const handleConfigure = () => {
     onClose();
-    router.push(`/edit-event/${event.id}` as any);
+    if (isTaskItem) {
+      router.push(`/edit-checklist/${event.id}` as any);
+    } else {
+      router.push(`/edit-event/${event.id}` as any);
+    }
   };
 
   return (
@@ -338,36 +345,69 @@ export function EventsList({ sortMode = 'manual' }: { sortMode?: SortMode }) {
   const colors = Colors[colorScheme];
   const router = useRouter();
   const { config, setConfig } = useToolConfig<EventsConfig>('events');
+  const { items: checklistItems } = useChecklist();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const events = config?.events ?? [];
 
-  const sortedEvents = React.useMemo(() => {
+  // Derive task-events from checklist items
+  const taskEventIds = useMemo(
+    () => new Set(checklistItems.filter((i) => i.displayAs === 'event' && !i.trashedAt && i.kind !== 'template' && i.recurrence === 'once').map((i) => i.id)),
+    [checklistItems]
+  );
+
+  const taskEvents = useMemo<Event[]>(
+    () =>
+      checklistItems
+        .filter((i) => taskEventIds.has(i.id))
+        .map((i) => ({
+          id: i.id,
+          title: i.title,
+          date: new Date(i.startDate).toISOString(),
+          icon: i.eventIcon ?? 'calendar-outline',
+          color: i.eventColor,
+          recurrence: i.eventRecurrence ?? { type: 'none' },
+          createdAt: i.createdAt,
+        })),
+    [checklistItems, taskEventIds]
+  );
+
+  const allEvents = useMemo(() => [...events, ...taskEvents], [events, taskEvents]);
+
+  const sortedEvents = useMemo(() => {
     if (sortMode === 'date') {
-      return [...events].sort((a, b) => getDaysUntilNextOccurrence(a.date, a.recurrence) - getDaysUntilNextOccurrence(b.date, b.recurrence));
+      return [...allEvents].sort((a, b) => getDaysUntilNextOccurrence(a.date, a.recurrence) - getDaysUntilNextOccurrence(b.date, b.recurrence));
     }
     if (sortMode === 'name') {
-      return [...events].sort((a, b) => a.title.localeCompare(b.title));
+      return [...allEvents].sort((a, b) => a.title.localeCompare(b.title));
     }
-    return events;
-  }, [events, sortMode]);
+    return allEvents;
+  }, [allEvents, sortMode]);
 
-  const selectedEvent = selectedId ? events.find((e) => e.id === selectedId) ?? null : null;
+  const selectedEvent = selectedId ? allEvents.find((e) => e.id === selectedId) ?? null : null;
 
   const removeEvent = useCallback(
     (id: string) => {
+      if (taskEventIds.has(id)) {
+        Alert.alert('Task Event', 'This event comes from a task. Edit or delete it from the Tasks screen.');
+        return;
+      }
       const current = config ?? DEFAULT_CONFIG;
       setConfig({
         ...current,
         events: current.events.filter((e) => e.id !== id),
       });
     },
-    [config, setConfig]
+    [config, setConfig, taskEventIds]
   );
 
   const handleDelete = useCallback(
     (id: string, title: string) => {
+      if (taskEventIds.has(id)) {
+        Alert.alert('Task Event', 'This event comes from a task. Edit or delete it from the Tasks screen.');
+        return;
+      }
       Alert.alert('Delete Event', `Delete "${title}"?`, [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -377,16 +417,16 @@ export function EventsList({ sortMode = 'manual' }: { sortMode?: SortMode }) {
         },
       ]);
     },
-    [removeEvent]
+    [removeEvent, taskEventIds]
   );
 
   const handleDragEnd = useCallback(
     ({ data }: { data: Event[] }) => {
       const current = config ?? DEFAULT_CONFIG;
-      setConfig({ ...current, events: data });
+      setConfig({ ...current, events: data.filter((e) => !taskEventIds.has(e.id)) });
       setIsDragging(false);
     },
-    [config, setConfig]
+    [config, setConfig, taskEventIds]
   );
 
   const renderItem = useCallback(
@@ -394,22 +434,24 @@ export function EventsList({ sortMode = 'manual' }: { sortMode?: SortMode }) {
       <SwipeableEventCard
         event={item}
         scheme={colorScheme}
-        showHandle={isDragging}
+        showHandle={isDragging && !taskEventIds.has(item.id)}
         onCardPress={setSelectedId}
         onDelete={handleDelete}
         drag={() => {
-          setIsDragging(true);
-          drag();
+          if (!taskEventIds.has(item.id)) {
+            setIsDragging(true);
+            drag();
+          }
         }}
         isActive={isActive}
       />
     ),
-    [colorScheme, isDragging, handleDelete]
+    [colorScheme, isDragging, handleDelete, taskEventIds]
   );
 
   return (
     <View style={styles.container}>
-      {events.length === 0 ? (
+      {allEvents.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="gift-outline" size={48} color={colors.secondaryText} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>No events yet</Text>
@@ -439,6 +481,7 @@ export function EventsList({ sortMode = 'manual' }: { sortMode?: SortMode }) {
         event={selectedEvent}
         visible={selectedId !== null}
         onClose={() => setSelectedId(null)}
+        isTaskItem={selectedId !== null && taskEventIds.has(selectedId)}
       />
     </View>
   );
