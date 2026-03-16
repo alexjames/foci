@@ -15,34 +15,19 @@ import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
 import {
   ToolId,
-  MementoMoriConfig,
-  GoalsConfig,
-  AffirmationsConfig,
-  BreathingConfig,
   FocusTimerConfig,
   FocusTimerAlarm,
   ToolConfig,
 } from '@/src/types';
-import { TOOL_REGISTRY, BREATHING_PRESETS } from '@/src/constants/tools';
+import { TOOL_REGISTRY } from '@/src/constants/tools';
 import { useTools } from '@/src/hooks/useTools';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
 import { TimePicker } from '@/src/components/TimePicker';
 
 function getDefaultConfig(toolId: ToolId): ToolConfig {
   switch (toolId) {
-    case 'memento-mori':
-      return { toolId: 'memento-mori', lifeExpectancy: 80, notificationEnabled: false };
     case 'goals':
       return { toolId: 'goals', notificationEnabled: false };
-    case 'affirmations':
-      return { toolId: 'affirmations', affirmations: [], notificationEnabled: false };
-    case 'breathing':
-      return {
-        toolId: 'breathing',
-        selectedPresetId: 'box',
-        durationSeconds: 120,
-        notificationEnabled: false,
-      };
     case 'focus-timer':
       return {
         toolId: 'focus-timer',
@@ -77,84 +62,11 @@ function getDefaultConfig(toolId: ToolId): ToolConfig {
         customCards: [],
         notificationEnabled: false,
       };
-    case 'tally-counter':
-      return { toolId: 'tally-counter', counters: [] };
     case 'routines':
       return { toolId: 'routines', routines: [] };
-    case 'motivational-quotes':
-      return { toolId: 'motivational-quotes', notificationEnabled: false };
+    default:
+      return { toolId: 'goals', notificationEnabled: false };
   }
-}
-
-function MementoConfig({ config, onUpdate }: { config: MementoMoriConfig; onUpdate: (c: MementoMoriConfig) => void }) {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-
-  return (
-    <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Life Expectancy</Text>
-      <View style={[styles.row, { backgroundColor: colors.cardBackground }]}>
-        <Text style={[styles.rowLabel, { color: colors.text }]}>Years</Text>
-        <View style={styles.stepperRow}>
-          <Pressable onPress={() => onUpdate({ ...config, lifeExpectancy: Math.max(28, config.lifeExpectancy - 1) })}>
-            <Ionicons name="remove-circle-outline" size={28} color={colors.tint} />
-          </Pressable>
-          <Text style={[styles.stepperValue, { color: colors.text }]}>{config.lifeExpectancy}</Text>
-          <Pressable onPress={() => onUpdate({ ...config, lifeExpectancy: Math.min(120, config.lifeExpectancy + 1) })}>
-            <Ionicons name="add-circle-outline" size={28} color={colors.tint} />
-          </Pressable>
-        </View>
-      </View>
-      <Text style={[styles.hint, { color: colors.secondaryText }]}>
-        Birthday is set when you first open the tool.
-      </Text>
-    </View>
-  );
-}
-
-function BreathingConfigView({ config, onUpdate }: { config: BreathingConfig; onUpdate: (c: BreathingConfig) => void }) {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-
-  return (
-    <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Preset</Text>
-      {BREATHING_PRESETS.map((preset) => (
-        <Pressable
-          key={preset.id}
-          style={[
-            styles.row,
-            { backgroundColor: colors.cardBackground },
-            config.selectedPresetId === preset.id && { borderColor: colors.tint, borderWidth: 2 },
-          ]}
-          onPress={() => onUpdate({ ...config, selectedPresetId: preset.id })}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.rowLabel, { color: colors.text }]}>{preset.name}</Text>
-            <Text style={[styles.hint, { color: colors.secondaryText, marginTop: 2 }]}>{preset.description}</Text>
-          </View>
-          {config.selectedPresetId === preset.id && (
-            <Ionicons name="checkmark-circle" size={24} color={colors.tint} />
-          )}
-        </Pressable>
-      ))}
-      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: Layout.spacing.md }]}>
-        Session Duration
-      </Text>
-      <View style={[styles.row, { backgroundColor: colors.cardBackground }]}>
-        <Text style={[styles.rowLabel, { color: colors.text }]}>Seconds</Text>
-        <View style={styles.stepperRow}>
-          <Pressable onPress={() => onUpdate({ ...config, durationSeconds: Math.max(30, config.durationSeconds - 30) })}>
-            <Ionicons name="remove-circle-outline" size={28} color={colors.tint} />
-          </Pressable>
-          <Text style={[styles.stepperValue, { color: colors.text }]}>{config.durationSeconds}</Text>
-          <Pressable onPress={() => onUpdate({ ...config, durationSeconds: Math.min(600, config.durationSeconds + 30) })}>
-            <Ionicons name="add-circle-outline" size={28} color={colors.tint} />
-          </Pressable>
-        </View>
-      </View>
-    </View>
-  );
 }
 
 const ALARM_OPTIONS: { value: FocusTimerAlarm; label: string }[] = [
@@ -272,18 +184,6 @@ export default function ToolConfigScreen() {
         </Pressable>
 
         {/* Tool-specific config */}
-        {toolId === 'memento-mori' && (
-          <MementoConfig
-            config={currentConfig as MementoMoriConfig}
-            onUpdate={(c) => handleUpdateConfig(c)}
-          />
-        )}
-        {toolId === 'breathing' && (
-          <BreathingConfigView
-            config={currentConfig as BreathingConfig}
-            onUpdate={(c) => handleUpdateConfig(c)}
-          />
-        )}
         {toolId === 'focus-timer' && (
           <FocusTimerConfigView
             config={currentConfig as FocusTimerConfig}

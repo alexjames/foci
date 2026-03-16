@@ -1,54 +1,24 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { StyleSheet, View, Text, useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
 import {
   ToolId,
-  MementoMoriConfig,
-  AffirmationsConfig,
-  BreathingConfig,
   FocusTimerConfig,
   DeadlineTrackerConfig,
   HabitTrackerConfig,
 } from '@/src/types';
-import { TOOL_REGISTRY, BREATHING_PRESETS, FOCUS_TIMER_PRESETS } from '@/src/constants/tools';
+import { TOOL_REGISTRY, FOCUS_TIMER_PRESETS } from '@/src/constants/tools';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
 import { useGoals } from '@/src/hooks/useGoals';
 import { useSettings } from '@/src/hooks/useSettings';
-import { calculateLifeData } from '@/src/utils/lifeData';
-import { MOTIVATIONAL_QUOTES } from '@/src/constants/quotes';
 
 interface HomeToolCardProps {
   toolId: ToolId;
   drag?: () => void;
   isActive?: boolean;
   showHandle?: boolean;
-}
-
-function MementoPreview() {
-  const { config } = useToolConfig<MementoMoriConfig>('memento-mori');
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-
-  const lifeData = useMemo(() => {
-    if (!config?.birthday) return null;
-    return calculateLifeData(new Date(config.birthday), config.lifeExpectancy ?? 80);
-  }, [config?.birthday, config?.lifeExpectancy]);
-
-  if (!lifeData) {
-    return (
-      <Text style={[styles.previewText, { color: colors.secondaryText }]}>
-        Tap to set your birthday
-      </Text>
-    );
-  }
-
-  return (
-    <Text style={[styles.previewText, { color: colors.secondaryText }]}>
-      {lifeData.daysRemaining.toLocaleString()} days remaining
-    </Text>
-  );
 }
 
 function GoalsPreview() {
@@ -63,40 +33,6 @@ function GoalsPreview() {
       {settings.lastCommitDate
         ? ` · Last reviewed ${new Date(settings.lastCommitDate).toLocaleDateString()}`
         : ''}
-    </Text>
-  );
-}
-
-function AffirmationsPreview() {
-  const { config } = useToolConfig<AffirmationsConfig>('affirmations');
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-  const customCount = config?.affirmations?.length ?? 0;
-
-  if (customCount === 0) {
-    return (
-      <Text style={[styles.previewText, { color: colors.secondaryText }]}>
-        Tap to add your first affirmation
-      </Text>
-    );
-  }
-
-  return (
-    <Text style={[styles.previewText, { color: colors.secondaryText }]}>
-      {customCount} custom affirmation{customCount !== 1 ? 's' : ''}
-    </Text>
-  );
-}
-
-function BreathingPreview() {
-  const { config } = useToolConfig<BreathingConfig>('breathing');
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-  const preset = BREATHING_PRESETS.find((p) => p.id === config?.selectedPresetId);
-
-  return (
-    <Text style={[styles.previewText, { color: colors.secondaryText }]}>
-      {preset?.name ?? 'Box Breathing'} · {(config?.durationSeconds ?? 120) / 60} min
     </Text>
   );
 }
@@ -168,39 +104,6 @@ function StreakTrackerPreview() {
   );
 }
 
-function TallyCounterPreview() {
-  const { config } = useToolConfig<import('@/src/types').TallyCounterConfig>('tally-counter');
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-  const counters = config?.counters ?? [];
-
-  if (counters.length === 0) {
-    return (
-      <Text style={[styles.previewText, { color: colors.secondaryText }]}>
-        Tap to add your first counter
-      </Text>
-    );
-  }
-
-  const top = [...counters].sort((a, b) => b.count - a.count)[0];
-  return (
-    <Text style={[styles.previewText, { color: colors.secondaryText }]}>
-      {counters.length} counter{counters.length !== 1 ? 's' : ''} · highest: {top.title} ({top.count})
-    </Text>
-  );
-}
-
-function MotivationalQuotesPreview() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-  const quote = MOTIVATIONAL_QUOTES[new Date().getDate() % MOTIVATIONAL_QUOTES.length];
-  return (
-    <Text style={[styles.previewText, { color: colors.secondaryText }]} numberOfLines={2}>
-      "{quote.text}" — {quote.author}
-    </Text>
-  );
-}
-
 function RoutinesPreview() {
   const { config } = useToolConfig<import('@/src/types').RoutinesConfig>('routines');
   const colorScheme = useColorScheme() ?? 'light';
@@ -232,16 +135,12 @@ export function HomeToolCard({ toolId, drag, isActive, showHandle }: HomeToolCar
 
   const renderPreview = () => {
     switch (toolId) {
-      case 'memento-mori': return <MementoPreview />;
       case 'goals': return <GoalsPreview />;
-      case 'affirmations': return <AffirmationsPreview />;
-      case 'breathing': return <BreathingPreview />;
       case 'focus-timer': return <FocusTimerPreview />;
       case 'deadline-tracker': return <DeadlineTrackerPreview />;
       case 'streak-tracker': return <StreakTrackerPreview />;
       case 'routines': return <RoutinesPreview />;
-      case 'tally-counter': return <TallyCounterPreview />;
-      case 'motivational-quotes': return <MotivationalQuotesPreview />;
+      default: return null;
     }
   };
 

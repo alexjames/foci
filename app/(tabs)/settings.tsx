@@ -18,10 +18,7 @@ import { useToolConfig } from '@/src/hooks/useToolConfig';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
 import { STORAGE_KEYS } from '@/src/types';
-import { BREATHING_PRESETS } from '@/src/constants/tools';
 import {
-  MementoMoriConfig,
-  BreathingConfig,
   FocusTimerConfig,
   FocusTimerAlarm,
 } from '@/src/types';
@@ -94,39 +91,6 @@ function StepperRow({
 
 // ─── Tool config sections ────────────────────────────────────────────────────
 
-function MementoMoriSection() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-  const { config, setConfig } = useToolConfig<MementoMoriConfig>('memento-mori');
-  const lifeExpectancy = config?.lifeExpectancy ?? 80;
-
-  const update = (delta: number) =>
-    setConfig({
-      ...(config ?? { toolId: 'memento-mori', notificationEnabled: false }),
-      lifeExpectancy: Math.min(120, Math.max(28, lifeExpectancy + delta)),
-    });
-
-  return (
-    <>
-      <SectionHeader label="MEMENTO MORI" />
-      <Card>
-        <StepperRow
-          label="Life Expectancy (years)"
-          value={lifeExpectancy}
-          onDecrement={() => update(-1)}
-          onIncrement={() => update(1)}
-        />
-        <Separator />
-        <Row>
-          <Text style={[styles.rowHint, { color: colors.secondaryText }]}>
-            Birthday is set the first time you open the tool.
-          </Text>
-        </Row>
-      </Card>
-    </>
-  );
-}
-
 const ALARM_OPTIONS: { value: FocusTimerAlarm; label: string }[] = [
   { value: 'both', label: 'Sound & Vibration' },
   { value: 'sound', label: 'Sound Only' },
@@ -176,56 +140,6 @@ function FocusTimerSection() {
             {i < ALARM_OPTIONS.length - 1 && <Separator />}
           </React.Fragment>
         ))}
-      </Card>
-    </>
-  );
-}
-
-function BreathingSection() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-  const { config, setConfig } = useToolConfig<BreathingConfig>('breathing');
-  const currentConfig: BreathingConfig = config ?? {
-    toolId: 'breathing',
-    selectedPresetId: 'box',
-    durationSeconds: 120,
-    notificationEnabled: false,
-  };
-
-  const updateDuration = (delta: number) =>
-    setConfig({
-      ...currentConfig,
-      durationSeconds: Math.min(600, Math.max(30, currentConfig.durationSeconds + delta)),
-    });
-
-  return (
-    <>
-      <SectionHeader label="BREATHING EXERCISE" />
-      <Card>
-        {BREATHING_PRESETS.map((preset, i) => (
-          <React.Fragment key={preset.id}>
-            <Pressable
-              style={styles.row}
-              onPress={() => setConfig({ ...currentConfig, selectedPresetId: preset.id })}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.rowLabel, { color: colors.text }]}>{preset.name}</Text>
-                <Text style={[styles.rowHint, { color: colors.secondaryText }]}>{preset.description}</Text>
-              </View>
-              {currentConfig.selectedPresetId === preset.id && (
-                <Ionicons name="checkmark-circle" size={20} color={colors.tint} />
-              )}
-            </Pressable>
-            {i < BREATHING_PRESETS.length - 1 && <Separator />}
-          </React.Fragment>
-        ))}
-        <Separator />
-        <StepperRow
-          label="Session Duration (sec)"
-          value={currentConfig.durationSeconds}
-          onDecrement={() => updateDuration(-30)}
-          onIncrement={() => updateDuration(30)}
-        />
       </Card>
     </>
   );
@@ -309,9 +223,7 @@ export default function SettingsScreen() {
       contentContainerStyle={styles.content}
     >
       {/* ── Tool Settings ── */}
-      <MementoMoriSection />
       <FocusTimerSection />
-      <BreathingSection />
 
       {/* ── Notifications ── */}
       <SectionHeader label="NOTIFICATIONS" />

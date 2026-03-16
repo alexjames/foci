@@ -1,11 +1,10 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   Pressable,
   Alert,
-  ScrollView,
   useColorScheme,
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -16,34 +15,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
-import { ToolId, MementoMoriConfig, BreathingConfig, Goal } from '@/src/types';
+import { ToolId, Goal } from '@/src/types';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
 import { TOOL_REGISTRY, DEADLINE_COLORS } from '@/src/constants/tools';
 
-// Memento imports
-import { useGoals } from '@/src/hooks/useGoals';
-import { calculateLifeData } from '@/src/utils/lifeData';
-import {
-  BirthdayPrompt,
-  CountdownTimer,
-  ViewSwitcher,
-  VisualizationType,
-} from '@/src/components/memento';
-import {
-  HourglassView,
-  YearGridView,
-  WeekGridView,
-  ProgressBarView,
-  SeasonsView,
-  HeartbeatsView,
-  SunsetsView,
-} from '@/src/components/memento/visualizations';
-
 // Goal imports
+import { useGoals } from '@/src/hooks/useGoals';
 import { EmptyState } from '@/src/components/EmptyState';
-
-// Breathing imports
-import { BreathingSessionView } from '@/src/components/breathing/BreathingSessionView';
 
 // Focus Timer imports
 import { FocusTimerSession } from '@/src/components/focus-timer/FocusTimerSession';
@@ -54,17 +32,11 @@ import { IdentitiesList } from '@/src/components/identities/IdentitiesList';
 // Deadline Tracker imports
 import { DeadlineTrackerList, SortMode } from '@/src/components/deadline-tracker/DeadlineTrackerList';
 
-// Tally Counter imports
-import { TallyCounterList } from '@/src/components/tally-counter/TallyCounterList';
-
 // Streak Tracker imports
 import { StreakTrackerList } from '@/src/components/streak-tracker/StreakTrackerList';
 
 // Routines import
 import { RoutineList } from '@/src/components/routine/RoutineList';
-
-// Motivational Quotes import
-import { QuotesView } from '@/src/components/motivational-quotes/QuotesView';
 
 // Events import
 import { EventsList, SortMode as EventSortMode } from '@/src/components/events/EventsList';
@@ -74,63 +46,6 @@ import { ListsView } from '@/src/components/lists/ListsView';
 
 // Priorities import
 import { PrioritiesView } from '@/src/components/priorities/PrioritiesView';
-
-function MementoView() {
-  const { config, setConfig } = useToolConfig<MementoMoriConfig>('memento-mori');
-  const [activeView, setActiveView] = useState<VisualizationType>('hourglass');
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
-
-  const handleBirthdaySet = useCallback(
-    (date: Date) => {
-      setConfig({
-        ...(config ?? { toolId: 'memento-mori', lifeExpectancy: 80, notificationEnabled: false }),
-        birthday: date.toISOString(),
-      });
-    },
-    [config, setConfig]
-  );
-
-  const lifeData = useMemo(() => {
-    if (!config?.birthday) return null;
-    return calculateLifeData(new Date(config.birthday), config.lifeExpectancy ?? 80);
-  }, [config?.birthday, config?.lifeExpectancy]);
-
-  if (!config?.birthday || !lifeData) {
-    return (
-      <BirthdayPrompt
-        onComplete={handleBirthdaySet}
-        lifeExpectancy={config?.lifeExpectancy ?? 80}
-      />
-    );
-  }
-
-  const renderVisualization = () => {
-    switch (activeView) {
-      case 'hourglass': return <HourglassView lifeData={lifeData} />;
-      case 'yearGrid': return <YearGridView lifeData={lifeData} />;
-      case 'weekGrid': return <WeekGridView lifeData={lifeData} />;
-      case 'progressBar': return <ProgressBarView lifeData={lifeData} />;
-      case 'seasons': return <SeasonsView lifeData={lifeData} />;
-      case 'sunsets': return <SunsetsView lifeData={lifeData} />;
-      case 'heartbeats': return <HeartbeatsView lifeData={lifeData} />;
-    }
-  };
-
-  return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ paddingBottom: 40 }}
-    >
-      <CountdownTimer
-        birthday={new Date(config.birthday)}
-        lifeExpectancy={config.lifeExpectancy ?? 80}
-      />
-      <ViewSwitcher active={activeView} onChange={setActiveView} />
-      {renderVisualization()}
-    </ScrollView>
-  );
-}
 
 function getGoalColor(colorId: string | undefined, scheme: 'light' | 'dark'): string {
   const found = DEADLINE_COLORS.find((c) => c.id === colorId);
@@ -300,10 +215,6 @@ function IdentitiesView() {
   return <IdentitiesList />;
 }
 
-function BreathingView() {
-  return <BreathingSessionView />;
-}
-
 function FocusTimerView() {
   return <FocusTimerSession />;
 }
@@ -316,16 +227,8 @@ function StreakTrackerView() {
   return <StreakTrackerList />;
 }
 
-function TallyCounterView() {
-  return <TallyCounterList />;
-}
-
 function RoutinesView() {
   return <RoutineList />;
-}
-
-function MotivationalQuotesView() {
-  return <QuotesView />;
 }
 
 function EventsView({ sortMode }: { sortMode: EventSortMode }) {
@@ -373,16 +276,12 @@ export default function ToolScreen() {
 
   const renderTool = () => {
     switch (toolId as ToolId) {
-      case 'memento-mori': return <MementoView />;
       case 'goals': return <GoalsView />;
       case 'identities': return <IdentitiesView />;
-      case 'breathing': return <BreathingView />;
       case 'focus-timer': return <FocusTimerView />;
       case 'deadline-tracker': return <DeadlineTrackerView sortMode={sortMode} />;
       case 'streak-tracker': return <StreakTrackerView />;
       case 'routines': return <RoutinesView />;
-      case 'tally-counter': return <TallyCounterView />;
-      case 'motivational-quotes': return <MotivationalQuotesView />;
       case 'events': return <EventsView sortMode={eventSortMode} />;
       case 'lists': return <ListsView />;
       case 'priorities': return <PrioritiesView />;

@@ -1,4 +1,4 @@
-import { ToolDefinition, BreathingPreset, DeadlineReminderType } from '../types';
+import { ToolDefinition, DeadlineReminderType } from '../types';
 
 export const TOOL_REGISTRY: ToolDefinition[] = [
 
@@ -74,38 +74,6 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     description:
       'Create up to 5 custom routines with your own steps. Play through them one card at a time.',
   },
-  {
-    id: 'breathing',
-    name: 'Breathing Exercise',
-    tagline: 'Breathe with intention',
-    icon: 'leaf-outline',
-    description:
-      'Guided breathing exercises with multiple presets. Box breathing, 4-7-8 relaxation, and deep breathing.',
-  },
-  {
-    id: 'tally-counter',
-    name: 'Tally Counter',
-    tagline: 'Count what matters',
-    icon: 'add-circle-outline',
-    description:
-      'Track anything with a simple tap counter. Add multiple counters, color-code them, and increment or decrement with a swipe.',
-  },
-  {
-    id: 'motivational-quotes',
-    name: 'Quotes',
-    tagline: 'Words that move you',
-    icon: 'chatbubble-ellipses-outline',
-    description:
-      '100 curated motivational quotes from stoic philosophers, leaders, athletes, and thinkers. One quote at a time, full screen.',
-  },
-  {
-    id: 'memento-mori',
-    name: 'Memento Mori',
-    tagline: 'Remember your mortality',
-    icon: 'hourglass-outline',
-    description:
-      'Visualize your life in weeks, months, and seasons. Set your birthday and life expectancy to see time in perspective.',
-  },
 ];
 
 export const FOCUS_TIMER_PRESETS = [
@@ -113,39 +81,6 @@ export const FOCUS_TIMER_PRESETS = [
   { label: '25 min', seconds: 25 * 60 },
   { label: '45 min', seconds: 45 * 60 },
   { label: '1 hour', seconds: 60 * 60 },
-];
-
-export const BREATHING_PRESETS: BreathingPreset[] = [
-  {
-    id: 'box',
-    name: 'Box Breathing',
-    description: '4-4-4-4 pattern used by Navy SEALs',
-    phases: [
-      { label: 'Inhale', durationSeconds: 4 },
-      { label: 'Hold', durationSeconds: 4 },
-      { label: 'Exhale', durationSeconds: 4 },
-      { label: 'Hold', durationSeconds: 4 },
-    ],
-  },
-  {
-    id: '478',
-    name: '4-7-8 Relaxation',
-    description: 'Calming technique for sleep and anxiety',
-    phases: [
-      { label: 'Inhale', durationSeconds: 4 },
-      { label: 'Hold', durationSeconds: 7 },
-      { label: 'Exhale', durationSeconds: 8 },
-    ],
-  },
-  {
-    id: 'deep',
-    name: 'Deep Breathing',
-    description: 'Simple 4-6 deep breathing',
-    phases: [
-      { label: 'Inhale', durationSeconds: 4 },
-      { label: 'Exhale', durationSeconds: 6 },
-    ],
-  },
 ];
 
 export const DEADLINE_COLORS = [

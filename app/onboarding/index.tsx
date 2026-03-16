@@ -23,7 +23,7 @@ export default function OnboardingWelcome() {
           </Text>
           <Text style={[styles.description, { color: colors.secondaryText }]}>
             Your personal toolkit for intentional living. Use tools like
-            checklists, goal tracking, memento mori, affirmations, and breathing exercises
+            checklists, goal tracking, habits, deadlines, and routines
             to maximize your focus and achieve your goals.
           </Text>
         </View>

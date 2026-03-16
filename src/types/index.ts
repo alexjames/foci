@@ -1,6 +1,6 @@
 // === TOOL SYSTEM ===
 
-export type ToolId = 'memento-mori' | 'goals' | 'identities' | 'breathing' | 'focus-timer' | 'deadline-tracker' | 'morning-routine' | 'evening-routine' | 'streak-tracker' | 'tally-counter' | 'routines' | 'motivational-quotes' | 'events' | 'lists' | 'priorities';
+export type ToolId = 'goals' | 'identities' | 'focus-timer' | 'deadline-tracker' | 'morning-routine' | 'evening-routine' | 'streak-tracker' | 'routines' | 'events' | 'lists' | 'priorities';
 
 export interface ToolDefinition {
   id: ToolId;
@@ -8,14 +8,6 @@ export interface ToolDefinition {
   tagline: string;
   icon: string;
   description: string;
-}
-
-export interface MementoMoriConfig {
-  toolId: 'memento-mori';
-  birthday?: string;
-  lifeExpectancy: number;
-  notificationEnabled: boolean;
-  notificationTime?: { hour: number; minute: number };
 }
 
 export interface GoalsConfig {
@@ -42,26 +34,6 @@ export interface IdentitiesConfig {
   identities: Identity[];
   notificationEnabled: boolean;
   notificationTime?: { hour: number; minute: number };
-}
-
-export interface BreathingConfig {
-  toolId: 'breathing';
-  selectedPresetId: string;
-  durationSeconds: number;
-  notificationEnabled: boolean;
-  notificationTime?: { hour: number; minute: number };
-}
-
-export interface BreathingPreset {
-  id: string;
-  name: string;
-  description: string;
-  phases: BreathingPhase[];
-}
-
-export interface BreathingPhase {
-  label: string;
-  durationSeconds: number;
 }
 
 export type FocusTimerAlarm = 'sound' | 'vibration' | 'both';
@@ -112,19 +84,6 @@ export interface HabitTrackerConfig {
   notificationTime?: { hour: number; minute: number };
 }
 
-export interface TallyCounter {
-  id: string;
-  title: string;
-  count: number;
-  color?: string;
-  createdAt: string;
-}
-
-export interface TallyCounterConfig {
-  toolId: 'tally-counter';
-  counters: TallyCounter[];
-}
-
 export interface RoutinePresetCard {
   id: string;
   title: string;
@@ -162,12 +121,6 @@ export interface Routine {
 export interface RoutinesConfig {
   toolId: 'routines';
   routines: Routine[];
-}
-
-export interface MotivationalQuotesConfig {
-  toolId: 'motivational-quotes';
-  notificationEnabled: boolean;
-  notificationTime?: { hour: number; minute: number };
 }
 
 export type EventRecurrence =
@@ -224,7 +177,7 @@ export interface PrioritiesConfig {
   priorities: Priority[];
 }
 
-export type ToolConfig = MementoMoriConfig | GoalsConfig | IdentitiesConfig | BreathingConfig | FocusTimerConfig | DeadlineTrackerConfig | HabitTrackerConfig | RoutineConfig | TallyCounterConfig | RoutinesConfig | MotivationalQuotesConfig | EventsConfig | ListsConfig | PrioritiesConfig;
+export type ToolConfig = GoalsConfig | IdentitiesConfig | FocusTimerConfig | DeadlineTrackerConfig | HabitTrackerConfig | RoutineConfig | RoutinesConfig | EventsConfig | ListsConfig | PrioritiesConfig;
 
 export interface HomeToolEntry {
   toolId: ToolId;
