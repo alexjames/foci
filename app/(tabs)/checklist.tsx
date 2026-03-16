@@ -2768,7 +2768,23 @@ export default function ChecklistScreen() {
   const [activeTab, setActiveTab] = useState<TabId>('today');
   const [activeView, setActiveView] = useState<ViewId>('tasks');
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { spawnRecurringInstances } = useChecklist();
+  const { spawnRecurringInstances, getItemsForDate, isCompleted, items } = useChecklist();
+
+  const overdueCount = useMemo(() => {
+    const today = startOfDay(new Date());
+    const seen = new Set<string>();
+    let count = 0;
+    for (let d = 1; d <= 30; d++) {
+      const date = addDays(today, -d);
+      for (const item of getItemsForDate(date)) {
+        if (seen.has(item.id)) continue;
+        if (isDueOnDate(item, today)) continue;
+        seen.add(item.id);
+        if (!isCompleted(item.id, date)) count++;
+      }
+    }
+    return count;
+  }, [getItemsForDate, isCompleted, items]);
 
   // Always reset to Tasks view when navigating to this tab
   useFocusEffect(
@@ -2856,15 +2872,22 @@ export default function ChecklistScreen() {
                   style={styles.tabItem}
                   onPress={() => setActiveTab(tab.id)}
                 >
-                  <Text
-                    style={[
-                      styles.tabLabel,
-                      { color: active ? colors.tint : colors.secondaryText },
-                      active && styles.tabLabelActive,
-                    ]}
-                  >
-                    {tab.label}
-                  </Text>
+                  <View style={styles.tabLabelRow}>
+                    <Text
+                      style={[
+                        styles.tabLabel,
+                        { color: active ? colors.tint : colors.secondaryText },
+                        active && styles.tabLabelActive,
+                      ]}
+                    >
+                      {tab.label}
+                    </Text>
+                    {tab.id === 'overdue' && overdueCount > 0 && (
+                      <View style={[styles.tabBadge, { backgroundColor: colors.tint }]} pointerEvents="none">
+                        <Text style={styles.tabBadgeText}>{overdueCount}</Text>
+                      </View>
+                    )}
+                  </View>
                   {active && <View style={[styles.tabUnderline, { backgroundColor: colors.tint }]} />}
                 </TouchableOpacity>
               );
@@ -2944,12 +2967,32 @@ const styles = StyleSheet.create({
     paddingVertical: Layout.spacing.md,
     position: 'relative',
   },
+  tabLabelRow: {
+    position: 'relative',
+  },
   tabLabel: {
     fontSize: Layout.fontSize.body,
     fontWeight: '500',
   },
   tabLabelActive: {
     fontWeight: '700',
+  },
+  tabBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    minWidth: 15,
+    height: 15,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#fff',
+    lineHeight: 11,
   },
   tabUnderline: {
     position: 'absolute',
