@@ -183,6 +183,17 @@ export default function EditChecklistScreen() {
   const [deadlineReminders, setDeadlineReminders] = useState<DeadlineReminderType[]>(
     existingItem?.deadlineReminders ?? []
   );
+  // Habit extra fields
+  const [habitColor, setHabitColor] = useState<string | undefined>(
+    existingItem?.habitColor
+  );
+  const [habitNotificationEnabled, setHabitNotificationEnabled] = useState<boolean>(
+    existingItem?.habitNotificationEnabled ?? false
+  );
+  const [habitNotificationTime, setHabitNotificationTime] = useState<{ hour: number; minute: number }>(
+    existingItem?.habitNotificationTime ?? { hour: 9, minute: 0 }
+  );
+  const [showHabitTimePicker, setShowHabitTimePicker] = useState(false);
   // Event extra fields
   const [eventIcon, setEventIcon] = useState<string>(
     existingItem?.eventIcon ?? 'calendar-outline'
@@ -270,6 +281,9 @@ export default function EditChecklistScreen() {
     eventIcon: displayAs === 'event' ? eventIcon : undefined,
     eventColor: displayAs === 'event' ? eventColor : undefined,
     eventRecurrence: displayAs === 'event' ? buildEventRecurrence() : undefined,
+    habitColor: displayAs === 'habit' ? habitColor : undefined,
+    habitNotificationEnabled: displayAs === 'habit' ? habitNotificationEnabled : undefined,
+    habitNotificationTime: displayAs === 'habit' && habitNotificationEnabled ? habitNotificationTime : undefined,
   });
 
   const handleSave = () => {
@@ -321,6 +335,9 @@ export default function EditChecklistScreen() {
           eventIcon: undefined,
           eventColor: undefined,
           eventRecurrence: undefined,
+          habitColor: undefined,
+          habitNotificationEnabled: undefined,
+          habitNotificationTime: undefined,
         });
       } else {
         addItem({
@@ -444,7 +461,7 @@ export default function EditChecklistScreen() {
           <>
             <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>Type</Text>
             <View style={[styles.segmentedControl, { backgroundColor: colors.cardBackground }]}>
-              {(['task', 'deadline', 'event'] as TaskDisplayAs[]).map((type) => (
+              {(['task', 'deadline', 'event', 'habit'] as TaskDisplayAs[]).map((type) => (
                 <Pressable
                   key={type}
                   style={[
@@ -840,6 +857,86 @@ export default function EditChecklistScreen() {
                 );
               })}
             </View>
+          </>
+        )}
+
+        {/* Habit extra fields */}
+        {!isEditingTemplate && !templateId && !repeats && !existingItem?.recurringRuleId && displayAs === 'habit' && (
+          <>
+            <Text style={[styles.label, { color: colors.text, marginTop: Layout.spacing.lg }]}>
+              Color (optional)
+            </Text>
+            <View style={styles.colorRow}>
+              <Pressable
+                onPress={() => setHabitColor(undefined)}
+                style={[
+                  styles.colorChip,
+                  { backgroundColor: colors.cardBackground, borderColor: colors.separator },
+                  !habitColor && { borderColor: colors.tint, borderWidth: 2 },
+                ]}
+              >
+                <Ionicons name="ban-outline" size={16} color={colors.secondaryText} />
+              </Pressable>
+              {DEADLINE_COLORS.map((c) => {
+                const chipColor = colorScheme === 'dark' ? c.dark : c.light;
+                return (
+                  <Pressable
+                    key={c.id}
+                    onPress={() => setHabitColor(c.id)}
+                    style={[
+                      styles.colorChip,
+                      { backgroundColor: chipColor },
+                      habitColor === c.id && { borderColor: colors.text, borderWidth: 2 },
+                    ]}
+                  />
+                );
+              })}
+            </View>
+
+            <Pressable
+              style={[styles.optionRow, { backgroundColor: colors.cardBackground, marginTop: Layout.spacing.lg }]}
+              onPress={() => {
+                setHabitNotificationEnabled((v) => !v);
+                setShowHabitTimePicker(false);
+              }}
+            >
+              <Text style={[styles.optionLabel, { color: colors.text }]}>Daily reminder</Text>
+              <Ionicons
+                name={habitNotificationEnabled ? 'checkmark-circle' : 'ellipse-outline'}
+                size={20}
+                color={habitNotificationEnabled ? colors.tint : colors.cardBorder}
+              />
+            </Pressable>
+
+            {habitNotificationEnabled && (
+              <Pressable
+                style={[styles.optionRow, { backgroundColor: colors.cardBackground }]}
+                onPress={() => setShowHabitTimePicker((v) => !v)}
+              >
+                <Text style={[styles.optionLabel, { color: colors.text }]}>Reminder time</Text>
+                <View style={styles.dateRowRight}>
+                  <Text style={[styles.dateButtonText, { color: colors.secondaryText }]}>
+                    {String(habitNotificationTime.hour).padStart(2, '0')}:{String(habitNotificationTime.minute).padStart(2, '0')}
+                  </Text>
+                  <Ionicons
+                    name={showHabitTimePicker ? 'chevron-up' : 'chevron-down'}
+                    size={16}
+                    color={colors.secondaryText}
+                  />
+                </View>
+              </Pressable>
+            )}
+
+            {habitNotificationEnabled && showHabitTimePicker && (
+              <DateTimePicker
+                value={(() => { const d = new Date(); d.setHours(habitNotificationTime.hour, habitNotificationTime.minute, 0, 0); return d; })()}
+                mode="time"
+                display="spinner"
+                onChange={(_, date) => {
+                  if (date) setHabitNotificationTime({ hour: date.getHours(), minute: date.getMinutes() });
+                }}
+              />
+            )}
           </>
         )}
 

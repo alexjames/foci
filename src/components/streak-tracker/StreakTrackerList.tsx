@@ -19,8 +19,9 @@ import DraggableFlatList, {
 import * as Haptics from 'expo-haptics';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
-import { HabitTrackerConfig, Habit } from '@/src/types';
+import { HabitTrackerConfig, Habit, ChecklistItem } from '@/src/types';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
+import { useChecklist } from '@/src/hooks/useChecklist';
 import { DEADLINE_COLORS } from '@/src/constants/tools';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -51,6 +52,19 @@ function getHabitColor(colorId: string | undefined, scheme: 'light' | 'dark'): s
 
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// ─── Unified display type ────────────────────────────────────────────────────
+
+/** A habit entry that may come from the native HabitTrackerConfig OR from a checklist item with displayAs='habit' */
+interface DisplayHabit {
+  id: string;
+  title: string;
+  color?: string;
+  completions: string[]; // YYYY-MM-DD strings
+  notificationEnabled?: boolean;
+  /** If set, this is a task-habit — navigating to configure goes to edit-checklist instead of edit-streak */
+  taskItemId?: string;
+}
 
 // ─── Year Grid ──────────────────────────────────────────────────────────────
 
@@ -183,7 +197,7 @@ function HabitDetailSheet({
   visible,
   onClose,
 }: {
-  habit: Habit | null;
+  habit: DisplayHabit | null;
   visible: boolean;
   onClose: () => void;
 }) {
@@ -218,7 +232,11 @@ function HabitDetailSheet({
 
   const handleConfigure = () => {
     onClose();
-    router.push(`/edit-streak/${habit.id}` as any);
+    if (habit.taskItemId) {
+      router.push(`/edit-checklist/${habit.taskItemId}` as any);
+    } else {
+      router.push(`/edit-streak/${habit.id}` as any);
+    }
   };
 
   return (
@@ -287,7 +305,7 @@ function SwipeableHabitCard({
   isActive,
   showHandle,
 }: {
-  habit: Habit;
+  habit: DisplayHabit;
   scheme: 'light' | 'dark';
   onCardPress: (id: string) => void;
   onToggleDay: (id: string, dateKey: string) => void;
@@ -313,18 +331,19 @@ function SwipeableHabitCard({
       <View style={[styles.swipeableContainer, isActive && styles.swipeableActive]}>
         <Swipeable
           ref={swipeableRef}
-          renderRightActions={() => <DeleteAction />}
+          renderRightActions={habit.taskItemId ? undefined : () => <DeleteAction />}
           onSwipeableOpen={(direction) => {
             if (direction === 'right') handleSwipeLeft();
           }}
           overshootRight={false}
-          enabled={!isActive}
+          enabled={!isActive && !habit.taskItemId}
         >
           <View style={[styles.card, { backgroundColor: colors.cardBackground, borderLeftColor: accentColor }]}>
             {/* Left: title + streak */}
             <Pressable
               onPress={() => onCardPress(habit.id)}
               onLongPress={() => {
+                if (habit.taskItemId) return;
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 drag();
               }}
@@ -399,15 +418,55 @@ export function StreakTrackerList() {
   const colors = Colors[colorScheme];
   const router = useRouter();
   const { config, setConfig } = useToolConfig<HabitTrackerConfig>('streak-tracker');
+  const { items: checklistItems, completions: checklistCompletions, toggleCompletion } = useChecklist();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const habits = config?.habits ?? [];
-  const canAdd = habits.length < 20;
-  const selectedHabit = selectedId ? habits.find((h) => h.id === selectedId) ?? null : null;
+  const nativeHabits = config?.habits ?? [];
+
+  // Build task-habits from checklist items with displayAs='habit'
+  const taskHabits = useMemo<DisplayHabit[]>(() => {
+    return checklistItems
+      .filter((item) => item.displayAs === 'habit' && !item.trashedAt)
+      .map((item) => {
+        const completionDates = checklistCompletions
+          .filter((c) => c.itemId === item.id)
+          .map((c) => c.date);
+        return {
+          id: item.id,
+          title: item.title,
+          color: item.habitColor,
+          completions: completionDates,
+          notificationEnabled: item.habitNotificationEnabled,
+          taskItemId: item.id,
+        };
+      });
+  }, [checklistItems, checklistCompletions]);
+
+  // Merge: native habits first, then task-habits
+  const allDisplayHabits = useMemo<DisplayHabit[]>(() => {
+    const native: DisplayHabit[] = nativeHabits.map((h) => ({
+      id: h.id,
+      title: h.title,
+      color: h.color,
+      completions: h.completions,
+      notificationEnabled: h.notificationEnabled,
+    }));
+    return [...native, ...taskHabits];
+  }, [nativeHabits, taskHabits]);
+
+  const canAdd = nativeHabits.length < 20;
+  const selectedHabit = selectedId ? allDisplayHabits.find((h) => h.id === selectedId) ?? null : null;
 
   const toggleDay = useCallback(
     (id: string, dateKey: string) => {
+      // Check if it's a task-habit
+      const isTaskHabit = taskHabits.some((h) => h.id === id);
+      if (isTaskHabit) {
+        const [y, m, d] = dateKey.split('-').map(Number);
+        toggleCompletion(id, new Date(y, m - 1, d));
+        return;
+      }
       const current = config ?? DEFAULT_CONFIG;
       setConfig({
         ...current,
@@ -423,7 +482,7 @@ export function StreakTrackerList() {
         }),
       });
     },
-    [config, setConfig]
+    [config, setConfig, taskHabits, toggleCompletion]
   );
 
   const handleDelete = useCallback(
@@ -445,16 +504,21 @@ export function StreakTrackerList() {
   );
 
   const handleDragEnd = useCallback(
-    ({ data }: { data: Habit[] }) => {
+    ({ data }: { data: DisplayHabit[] }) => {
+      // Only reorder native habits — task-habits are always appended at the end
+      const reorderedNative = data
+        .filter((d) => !d.taskItemId)
+        .map((d) => nativeHabits.find((h) => h.id === d.id)!)
+        .filter(Boolean) as Habit[];
       const current = config ?? DEFAULT_CONFIG;
-      setConfig({ ...current, habits: data });
+      setConfig({ ...current, habits: reorderedNative });
       setIsDragging(false);
     },
-    [config, setConfig]
+    [config, setConfig, nativeHabits]
   );
 
   const renderItem = useCallback(
-    ({ item, drag, isActive }: RenderItemParams<Habit>) => (
+    ({ item, drag, isActive }: RenderItemParams<DisplayHabit>) => (
       <SwipeableHabitCard
         habit={item}
         scheme={colorScheme}
@@ -463,7 +527,7 @@ export function StreakTrackerList() {
         onDelete={handleDelete}
         drag={() => { setIsDragging(true); drag(); }}
         isActive={isActive}
-        showHandle={isDragging}
+        showHandle={isDragging && !item.taskItemId}
       />
     ),
     [colorScheme, toggleDay, handleDelete, isDragging]
@@ -471,7 +535,7 @@ export function StreakTrackerList() {
 
   return (
     <View style={styles.container}>
-      {habits.length === 0 ? (
+      {allDisplayHabits.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="checkmark-circle-outline" size={48} color={colors.secondaryText} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>No habits yet</Text>
@@ -481,7 +545,7 @@ export function StreakTrackerList() {
         </View>
       ) : (
         <DraggableFlatList
-          data={habits}
+          data={allDisplayHabits}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           onDragEnd={handleDragEnd}

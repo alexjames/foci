@@ -14,7 +14,7 @@ import { useChecklist } from '@/src/hooks/useChecklist';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
 import {
   DeadlineTrackerConfig, Deadline,
-  HabitTrackerConfig, Habit,
+  HabitTrackerConfig,
   RoutinesConfig, Routine,
   EventsConfig, Event, EventRecurrence,
   PrioritiesConfig, Priority,
@@ -188,7 +188,7 @@ function PrioritiesSection({ priorities }: { priorities: Priority[] }) {
 
   return (
     <View>
-      <SectionHeader icon="flag-outline" label="PRIORITIES" toolId="priorities" />
+      <SectionHeader icon="flag-outline" label="WEEKLY PRIORITIES" toolId="priorities" />
       <View style={styles.sectionItems}>
         {priorities.map((priority, index) => (
           <Pressable
@@ -218,6 +218,7 @@ function TasksSection({
 }) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
+  const router = useRouter();
   if (items.length === 0) return null;
   const visible = items.slice(0, CAP);
   const extra = items.length - CAP;
@@ -227,7 +228,11 @@ function TasksSection({
       <SectionHeader icon="checkmark-circle-outline" label="TASKS" toolId="checklist" />
       <View style={styles.sectionItems}>
         {visible.map((item) => (
-          <View key={item.id} style={[styles.itemRow, { backgroundColor: colors.background }]}>
+          <Pressable
+            key={item.id}
+            onPress={() => router.push('/(tabs)/checklist' as any)}
+            style={({ pressed }) => [styles.itemRow, { backgroundColor: colors.background, opacity: pressed ? 0.7 : 1 }]}
+          >
             <Pressable
               onPress={() => toggleCompletion(item.id, today)}
               hitSlop={8}
@@ -236,7 +241,7 @@ function TasksSection({
             <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
               {item.title}
             </Text>
-          </View>
+          </Pressable>
         ))}
       </View>
       {extra > 0 && <MoreLink count={extra} toolId="checklist" />}
@@ -375,12 +380,20 @@ function RoutinesSection({ routines }: { routines: Routine[] }) {
 
 // ─── Habits Section ───────────────────────────────────────────────────────────
 
+interface DisplayHabit {
+  id: string;
+  title: string;
+  color?: string;
+  completions: string[];
+  taskItemId?: string;
+}
+
 function HabitRow({
   habit,
   scheme,
   onToggleDay,
 }: {
-  habit: Habit;
+  habit: DisplayHabit;
   scheme: 'light' | 'dark';
   onToggleDay: (id: string, dateKey: string) => void;
 }) {
@@ -427,7 +440,7 @@ function HabitsSection({
   habits,
   onToggleDay,
 }: {
-  habits: Habit[];
+  habits: DisplayHabit[];
   onToggleDay: (id: string, dateKey: string) => void;
 }) {
   const colorScheme = useColorScheme() ?? 'light';
@@ -460,7 +473,7 @@ export function BriefingCard() {
   const priorities = prioritiesConfig?.priorities ?? [];
 
   // Tasks
-  const { items: checklistItems, getItemsForDate, isCompleted, toggleCompletion } = useChecklist();
+  const { items: checklistItems, completions: checklistCompletions, getItemsForDate, isCompleted, toggleCompletion } = useChecklist();
   const today = useMemo(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -529,10 +542,37 @@ export function BriefingCard() {
 
   // Habits
   const { config: habitConfig, setConfig: setHabitConfig } = useToolConfig<HabitTrackerConfig>('streak-tracker');
-  const habits = habitConfig?.habits ?? [];
+  const nativeHabits = habitConfig?.habits ?? [];
+
+  const taskHabits = useMemo<DisplayHabit[]>(() => {
+    return checklistItems
+      .filter((item) => item.displayAs === 'habit' && !item.trashedAt)
+      .map((item) => ({
+        id: item.id,
+        title: item.title,
+        color: item.habitColor,
+        completions: checklistCompletions.filter((c) => c.itemId === item.id).map((c) => c.date),
+        taskItemId: item.id,
+      }));
+  }, [checklistItems, checklistCompletions]);
+
+  const allHabits = useMemo<DisplayHabit[]>(
+    () => [
+      ...nativeHabits.map((h) => ({ id: h.id, title: h.title, color: h.color, completions: h.completions })),
+      ...taskHabits,
+    ],
+    [nativeHabits, taskHabits]
+  );
 
   const toggleHabitDay = useCallback(
     (habitId: string, dateKey: string) => {
+      // Task-habit: toggle checklist completion
+      if (taskHabits.some((h) => h.id === habitId)) {
+        const [y, m, d] = dateKey.split('-').map(Number);
+        toggleCompletion(habitId, new Date(y, m - 1, d));
+        return;
+      }
+      // Native habit
       if (!habitConfig) return;
       setHabitConfig({
         ...habitConfig,
@@ -548,7 +588,7 @@ export function BriefingCard() {
         }),
       });
     },
-    [habitConfig, setHabitConfig]
+    [habitConfig, setHabitConfig, taskHabits, toggleCompletion]
   );
 
   const hasAny =
@@ -557,7 +597,7 @@ export function BriefingCard() {
     upcomingDeadlines.length > 0 ||
     upcomingEvents.length > 0 ||
     routines.length > 0 ||
-    habits.length > 0;
+    allHabits.length > 0;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
@@ -571,7 +611,7 @@ export function BriefingCard() {
             toggleCompletion={toggleCompletion}
           />
           <RoutinesSection routines={routines} />
-          <HabitsSection habits={habits} onToggleDay={toggleHabitDay} />
+          <HabitsSection habits={allHabits} onToggleDay={toggleHabitDay} />
           <DeadlinesSection deadlines={upcomingDeadlines} />
           <EventsSection events={upcomingEvents} />
         </View>
