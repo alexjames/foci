@@ -921,6 +921,6 @@ const styles = StyleSheet.create({
   },
   inlineMilestoneLabel: {
     flex: 1,
-    fontSize: Layout.fontSize.caption,
+    fontSize: Math.round(Layout.fontSize.caption * 1.2),
   },
 });
