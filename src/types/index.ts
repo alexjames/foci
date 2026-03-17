@@ -1,6 +1,6 @@
 // === TOOL SYSTEM ===
 
-export type ToolId = 'goals' | 'identities' | 'focus-timer' | 'deadline-tracker' | 'morning-routine' | 'evening-routine' | 'streak-tracker' | 'routines' | 'events' | 'lists' | 'priorities';
+export type ToolId = 'goals' | 'identities' | 'focus-timer' | 'deadline-tracker' | 'morning-routine' | 'evening-routine' | 'streak-tracker' | 'routines' | 'events' | 'priorities';
 
 export interface ToolDefinition {
   id: ToolId;
@@ -145,24 +145,13 @@ export interface EventsConfig {
   events: Event[];
 }
 
-export interface ListItem {
-  id: string;
-  text: string;
-  checked: boolean;
-  linkedChecklistId?: string;
-  createdAt: string;
-}
 
-export interface List {
-  id: string;
-  title: string;
-  items: ListItem[];
-  createdAt: string;
-}
+export type PriorityUnit = 'milestone' | 'number' | 'percentage';
 
-export interface ListsConfig {
-  toolId: 'lists';
-  lists: List[];
+export interface MilestoneStep {
+  id: string;
+  label: string;
+  completed: boolean;
 }
 
 export interface Priority {
@@ -170,6 +159,11 @@ export interface Priority {
   text: string; // max 140 chars
   goalId: string | 'non-goal';
   createdAt: string;
+  unit?: PriorityUnit;
+  numberValue?: number;
+  numberTarget?: number;
+  percentageValue?: number;
+  milestoneSteps?: MilestoneStep[];
 }
 
 export interface PrioritiesConfig {
@@ -177,7 +171,7 @@ export interface PrioritiesConfig {
   priorities: Priority[];
 }
 
-export type ToolConfig = GoalsConfig | IdentitiesConfig | FocusTimerConfig | DeadlineTrackerConfig | HabitTrackerConfig | RoutineConfig | RoutinesConfig | EventsConfig | ListsConfig | PrioritiesConfig;
+export type ToolConfig = GoalsConfig | IdentitiesConfig | FocusTimerConfig | DeadlineTrackerConfig | HabitTrackerConfig | RoutineConfig | RoutinesConfig | EventsConfig | PrioritiesConfig;
 
 export interface HomeToolEntry {
   toolId: ToolId;
@@ -253,6 +247,7 @@ export interface AppSettings {
   notificationsEnabled: boolean;
   hasCompletedOnboarding: boolean;
   lastCommitDate?: string;
+  userName?: string;
 }
 
 export interface AppState {

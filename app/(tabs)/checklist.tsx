@@ -29,7 +29,6 @@ import DraggableFlatList, {
   ScaleDecorator,
 } from 'react-native-draggable-flatlist';
 import Swipeable, { SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
-import { useLists } from '@/src/hooks/useLists';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -783,7 +782,6 @@ function TodayTab() {
   const colors = Colors[colorScheme];
   const router = useRouter();
   const { getItemsForDate, isCompleted, toggleCompletion, updateCompletion, addItem, updateItem, moveToTrash, spawnRecurringInstances, items } = useChecklist();
-  const { syncChecklistToList } = useLists();
   const today = useMemo(() => startOfDay(new Date()), []);
 
   // Spawn recurring instances when the screen comes into focus (picks up newly added rules)
@@ -865,7 +863,6 @@ function TodayTab() {
 
   const handleToggle = useCallback(
     (item: ChecklistItem, date: Date) => {
-      const nowCompleted = !isCompleted(item.id, date);
       if (date === today) {
         const id = item.id;
         const isPending = pendingComplete.has(id);
@@ -879,11 +876,10 @@ function TodayTab() {
       } else {
         toggleCompletion(item.id, date);
       }
-      syncChecklistToList(item.id, nowCompleted);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setShowQuickAdd(true);
     },
-    [toggleCompletion, syncChecklistToList, today, pendingComplete, isCompleted]
+    [toggleCompletion, today, pendingComplete, isCompleted]
   );
 
   const scrollOffsetRef = useRef(0);
@@ -1312,19 +1308,16 @@ function UpcomingTab() {
   const colors = Colors[colorScheme];
   const router = useRouter();
   const { getItemsForDate, isCompleted, toggleCompletion, updateCompletion, updateItem, moveToTrash, items } = useChecklist();
-  const { syncChecklistToList } = useLists();
   // router used in onEdit inside TaskDetailModal
 
   const today = useMemo(() => startOfDay(new Date()), []);
 
   const handleToggle = useCallback(
     (itemId: string, date: Date) => {
-      const nowCompleted = !isCompleted(itemId, date);
       toggleCompletion(itemId, date);
-      syncChecklistToList(itemId, nowCompleted);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     },
-    [toggleCompletion, syncChecklistToList, isCompleted]
+    [toggleCompletion, isCompleted]
   );
 
   // Build upcoming entries deduplicated by item id, first occurrence wins
@@ -1776,18 +1769,14 @@ function OverdueTab() {
   const colors = Colors[colorScheme];
   const router = useRouter();
   const { getItemsForDate, isCompleted, toggleCompletion, updateCompletion, updateItem, moveToTrash, items } = useChecklist();
-  const { syncChecklistToList } = useLists();
-
   const today = useMemo(() => startOfDay(new Date()), []);
 
   const handleToggle = useCallback(
     (itemId: string, date: Date) => {
-      const nowCompleted = !isCompleted(itemId, date);
       toggleCompletion(itemId, date);
-      syncChecklistToList(itemId, nowCompleted);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     },
-    [toggleCompletion, syncChecklistToList, isCompleted]
+    [toggleCompletion, isCompleted]
   );
 
   // Build overdue entries split into Yesterday / This Week / Earlier
@@ -2597,11 +2586,12 @@ export default function ChecklistScreen() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerLeft: () => (
+      headerLeft: () => null,
+      headerRight: () => (
         <Pressable
           hitSlop={8}
           onPress={() => setDrawerOpen(true)}
-          style={{ marginLeft: 8, padding: 4 }}
+          style={{ marginRight: 8, padding: 4 }}
         >
           <Ionicons name="menu-outline" size={24} color={colors.text} />
         </Pressable>

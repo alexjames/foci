@@ -15,7 +15,9 @@
       "WebSearch",
       "WebFetch(domain:www.npmjs.com)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:expo.dev)"
+      "WebFetch(domain:expo.dev)",
+      "Bash(grep -r priorities: /c/Users/darkm/Software/foci/src/constants --include=*.ts --include=*.tsx)",
+      "Bash(grep -rn \"lists\\\\|ListsView\\\\|useLists\" /c/Users/darkm/Software/foci/app --include=*.tsx --include=*.ts)"
     ]
   }
 }

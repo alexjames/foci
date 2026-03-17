@@ -42,9 +42,6 @@ import { RoutineList } from '@/src/components/routine/RoutineList';
 // Events import
 import { EventsList, SortMode as EventSortMode } from '@/src/components/events/EventsList';
 
-// Lists import
-import { ListsView } from '@/src/components/lists/ListsView';
-
 // Priorities import
 import { PrioritiesView } from '@/src/components/priorities/PrioritiesView';
 
@@ -318,7 +315,6 @@ export default function ToolScreen() {
       case 'streak-tracker': return <StreakTrackerView />;
       case 'routines': return <RoutinesView />;
       case 'events': return <EventsView sortMode={eventSortMode} />;
-      case 'lists': return <ListsView />;
       case 'priorities': return <PrioritiesView />;
       default: return <Text style={{ color: colors.text }}>Unknown tool</Text>;
     }

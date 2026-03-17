@@ -1,17 +1,20 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   Pressable,
+  TextInput,
   useColorScheme,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
 import { useChecklist } from '@/src/hooks/useChecklist';
 import { useToolConfig } from '@/src/hooks/useToolConfig';
+import { useSettings } from '@/src/hooks/useSettings';
 import {
   DeadlineTrackerConfig, Deadline,
   HabitTrackerConfig,
@@ -19,6 +22,7 @@ import {
   EventsConfig, Event, EventRecurrence,
   PrioritiesConfig, Priority,
 } from '@/src/types';
+import { computeProgress } from '@/src/components/priorities/PrioritiesView';
 import { DEADLINE_COLORS } from '@/src/constants/tools';
 
 const CAP = 3;
@@ -180,26 +184,117 @@ function MoreLink({ count, toolId }: { count: number; toolId: string }) {
 
 // ─── Priorities Section ───────────────────────────────────────────────────────
 
-function PrioritiesSection({ priorities }: { priorities: Priority[] }) {
+function PrioritiesSection({ priorities, onUpdateProgress }: { priorities: Priority[]; onUpdateProgress: (id: string, data: Partial<Priority>) => void }) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const router = useRouter();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingNumberId, setEditingNumberId] = useState<string | null>(null);
+  const [numberText, setNumberText] = useState('');
+  const [sliderValue, setSliderValue] = useState<number | null>(null);
+
   if (priorities.length === 0) return null;
+
+  const commitNumber = (priority: Priority) => {
+    const v = Math.max(0, parseInt(numberText) || 0);
+    onUpdateProgress(priority.id, { numberValue: v });
+    setEditingNumberId(null);
+  };
 
   return (
     <View>
       <SectionHeader icon="flag-outline" label="WEEKLY PRIORITIES" toolId="priorities" />
       <View style={styles.sectionItems}>
-        {priorities.map((priority, index) => (
-          <Pressable
-            key={priority.id}
-            onPress={() => router.push('/tool/priorities' as any)}
-            style={({ pressed }) => [styles.itemRow, { backgroundColor: colors.background, opacity: pressed ? 0.7 : 1 }]}
-          >
-            <Text style={[styles.priorityRank, { color: colors.tint }]}>{index + 1}</Text>
-            <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={2}>{priority.text}</Text>
-          </Pressable>
-        ))}
+        {priorities.map((priority) => {
+          const progress = computeProgress(priority);
+          const isExpanded = expandedId === priority.id;
+          return (
+            <Pressable
+              key={priority.id}
+              onPress={() => {
+                if (priority.unit) {
+                  setExpandedId(isExpanded ? null : priority.id);
+                  setEditingNumberId(null);
+                } else {
+                  router.push('/tool/priorities' as any);
+                }
+              }}
+              style={({ pressed }) => [styles.itemRow, { backgroundColor: colors.background, opacity: pressed ? 0.7 : 1 }]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={2}>{priority.text}</Text>
+                {progress && !(isExpanded && priority.unit === 'percentage') && (
+                  <View style={styles.homeProgressRow}>
+                    <View style={styles.homeProgressTrack}>
+                      <View style={[styles.homeProgressFill, { width: `${Math.round(progress.fraction * 100)}%` as any, backgroundColor: colors.tint }]} />
+                    </View>
+                    <Text style={[styles.homeProgressLabel, { color: colors.tint }]}>{progress.label}</Text>
+                  </View>
+                )}
+                {isExpanded && priority.unit === 'percentage' && (
+                  <View style={styles.inlineSliderRow}>
+                    <Slider
+                      style={{ flex: 1 }}
+                      minimumValue={0}
+                      maximumValue={100}
+                      step={1}
+                      value={priority.percentageValue ?? 0}
+                      minimumTrackTintColor={colors.tint}
+                      maximumTrackTintColor={colors.separator}
+                      thumbTintColor={colors.tint}
+                      onValueChange={(v) => setSliderValue(Math.round(v))}
+                      onSlidingComplete={(v) => {
+                        const rounded = Math.round(v);
+                        onUpdateProgress(priority.id, { percentageValue: rounded });
+                        setSliderValue(null);
+                      }}
+                    />
+                    <Text style={[styles.inlineValue, { color: colors.tint }]}>
+                      {(sliderValue !== null ? sliderValue : (priority.percentageValue ?? 0))}%
+                    </Text>
+                  </View>
+                )}
+                {isExpanded && priority.unit === 'number' && (
+                  <View style={styles.inlineControls}>
+                    {editingNumberId === priority.id ? (
+                      <TextInput
+                        style={[styles.inlineNumberInput, { color: colors.text, borderColor: colors.tint, backgroundColor: colors.cardBackground }]}
+                        value={numberText}
+                        onChangeText={setNumberText}
+                        keyboardType="numeric"
+                        autoFocus
+                        returnKeyType="done"
+                        onBlur={() => commitNumber(priority)}
+                        onSubmitEditing={() => commitNumber(priority)}
+                      />
+                    ) : (
+                      <Pressable
+                        onPress={() => { setNumberText(priority.numberValue ? String(priority.numberValue) : ''); setEditingNumberId(priority.id); }}
+                        style={[styles.inlineNumberInput, { borderColor: colors.separator, backgroundColor: colors.cardBackground, justifyContent: 'center' }]}
+                      >
+                        <Text style={[styles.inlineValue, { color: priority.numberValue ? colors.text : colors.secondaryText }]}>{priority.numberValue || '—'}</Text>
+                      </Pressable>
+                    )}
+                    <Text style={[styles.inlineValueSub, { color: colors.secondaryText }]}>/ {priority.numberTarget ?? 1}</Text>
+                  </View>
+                )}
+                {isExpanded && priority.unit === 'milestone' && (priority.milestoneSteps ?? []).map((step) => (
+                  <Pressable
+                    key={step.id}
+                    style={styles.inlineMilestoneRow}
+                    onPress={() => {
+                      const updated = (priority.milestoneSteps ?? []).map((s) => s.id === step.id ? { ...s, completed: !s.completed } : s);
+                      onUpdateProgress(priority.id, { milestoneSteps: updated });
+                    }}
+                  >
+                    <Ionicons name={step.completed ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={step.completed ? colors.tint : colors.secondaryText} />
+                    <Text style={[styles.inlineMilestoneLabel, { color: step.completed ? colors.secondaryText : colors.text, textDecorationLine: step.completed ? 'line-through' : 'none' }]} numberOfLines={1}>{step.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
@@ -466,11 +561,20 @@ function HabitsSection({
 export function BriefingCard() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
-  const greeting = useMemo(() => getGreeting(), []);
+  const { settings } = useSettings();
+  const greeting = useMemo(() => {
+    const base = getGreeting();
+    return settings.userName?.trim() ? `${base}, ${settings.userName.trim()}` : base;
+  }, [settings.userName]);
 
   // Priorities
-  const { config: prioritiesConfig } = useToolConfig<PrioritiesConfig>('priorities');
+  const { config: prioritiesConfig, setConfig: setPrioritiesConfig } = useToolConfig<PrioritiesConfig>('priorities');
   const priorities = prioritiesConfig?.priorities ?? [];
+
+  const updatePriorityProgress = useCallback((id: string, data: Partial<Priority>) => {
+    if (!prioritiesConfig) return;
+    setPrioritiesConfig({ ...prioritiesConfig, priorities: prioritiesConfig.priorities.map((p) => p.id === id ? { ...p, ...data } : p) });
+  }, [prioritiesConfig, setPrioritiesConfig]);
 
   // Tasks
   const { items: checklistItems, completions: checklistCompletions, getItemsForDate, isCompleted, toggleCompletion } = useChecklist();
@@ -604,7 +708,7 @@ export function BriefingCard() {
       <Text style={[styles.greeting, { color: colors.secondaryText }]}>{greeting}</Text>
       {hasAny && (
         <View style={styles.sections}>
-          <PrioritiesSection priorities={priorities} />
+          <PrioritiesSection priorities={priorities} onUpdateProgress={updatePriorityProgress} />
           <TasksSection
             items={pendingTodayItems}
             today={today}
@@ -641,7 +745,7 @@ const styles = StyleSheet.create({
     marginBottom: Layout.spacing.xs,
   },
   sectionLabel: {
-    fontSize: Layout.fontSize.caption,
+    fontSize: Layout.fontSize.caption * 1.1,
     fontWeight: '700',
     letterSpacing: 0.5,
     flex: 1,
@@ -743,5 +847,80 @@ const styles = StyleSheet.create({
   moreLinkText: {
     fontSize: Layout.fontSize.caption,
     fontWeight: '600',
+  },
+  homeProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.sm,
+    marginTop: 4,
+  },
+  homeProgressTrack: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    overflow: 'hidden',
+  },
+  homeProgressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  homeProgressLabel: {
+    fontSize: Layout.fontSize.caption,
+    fontWeight: '600',
+    minWidth: 44,
+    textAlign: 'right',
+  },
+  inlineControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Layout.spacing.sm,
+    marginTop: Layout.spacing.sm,
+  },
+  inlineSliderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.sm,
+    marginTop: Layout.spacing.sm,
+  },
+  inlineBtn: {
+    paddingHorizontal: Layout.spacing.md,
+    paddingVertical: Layout.spacing.xs,
+    borderRadius: Layout.borderRadius.sm,
+  },
+  inlineBtnText: {
+    fontSize: Layout.fontSize.body,
+    fontWeight: '600',
+  },
+  inlineValue: {
+    fontSize: Layout.fontSize.body,
+    fontWeight: '700',
+    minWidth: 40,
+    textAlign: 'center',
+  },
+  inlineValueSub: {
+    fontSize: Layout.fontSize.body,
+  },
+  inlineNumberInput: {
+    fontSize: Layout.fontSize.body,
+    fontWeight: '700',
+    borderWidth: 1,
+    borderRadius: Layout.borderRadius.sm,
+    paddingHorizontal: Layout.spacing.sm,
+    paddingVertical: 2,
+    minWidth: 48,
+    textAlign: 'center',
+  },
+  inlineMilestoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.sm,
+    paddingVertical: 3,
+    marginTop: 2,
+  },
+  inlineMilestoneLabel: {
+    flex: 1,
+    fontSize: Layout.fontSize.caption,
   },
 });

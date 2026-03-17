@@ -9,6 +9,7 @@ import {
   Share,
   View,
   Text,
+  TextInput,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -222,6 +223,22 @@ export default function SettingsScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
     >
+      {/* ── Profile ── */}
+      <SectionHeader label="PROFILE" />
+      <Card>
+        <Row>
+          <Text style={[styles.rowLabel, { color: colors.text }]}>Your Name</Text>
+          <TextInput
+            style={[styles.nameInput, { color: colors.text, borderColor: colors.separator }]}
+            placeholder="Enter your name"
+            placeholderTextColor={colors.secondaryText}
+            value={settings.userName ?? ''}
+            onChangeText={(text) => updateSettings({ userName: text })}
+            returnKeyType="done"
+          />
+        </Row>
+      </Card>
+
       {/* ── Tool Settings ── */}
       <FocusTimerSection />
 
@@ -330,5 +347,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     minWidth: 40,
     textAlign: 'center',
+  },
+  nameInput: {
+    fontSize: Layout.fontSize.body,
+    textAlign: 'right',
+    flex: 1,
+    marginLeft: Layout.spacing.md,
   },
 });

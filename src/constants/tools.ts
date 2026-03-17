@@ -35,14 +35,6 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
       'Track birthdays, anniversaries, holidays and more. See upcoming events at a glance and count down to what matters most.',
   },
   {
-    id: 'lists',
-    name: 'Lists',
-    tagline: 'List of lists',
-    icon: 'list-outline',
-    description:
-      'Create and manage multiple to-do lists. Check items off, reorder them, and send any task to your daily checklist.',
-  },
-  {
     id: 'focus-timer',
     name: 'Focus Timer',
     tagline: 'Deep work, timed',
