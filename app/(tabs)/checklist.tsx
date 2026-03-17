@@ -13,6 +13,7 @@ import {
   Platform,
   Keyboard,
   Animated as RNAnimated,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -354,8 +355,13 @@ function TaskDetailModal({
   };
 
   return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={detailStyles.sheet}>
+    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={detailStyles.kavWrapper}
+      >
+      <View style={[detailStyles.sheet, { backgroundColor: colors.background }]}>
+        <View style={[detailStyles.handle, { backgroundColor: colors.separator }]} />
         {/* Header */}
         <View style={detailStyles.header}>
           <Pressable onPress={onClose} hitSlop={8} style={detailStyles.closeBtn}>
@@ -388,7 +394,7 @@ function TaskDetailModal({
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={detailStyles.scrollContent} keyboardShouldPersistTaps="handled">
+        <ScrollView style={detailStyles.scrollArea} contentContainerStyle={detailStyles.scrollContent} keyboardShouldPersistTaps="handled">
         {/* Card */}
         <View style={[detailStyles.card, { backgroundColor: colors.cardBackground }]}>
           <Text style={[detailStyles.cardTitle, { color: colors.text }]}>
@@ -540,8 +546,9 @@ function TaskDetailModal({
           )}
 
         </View>
+        </ScrollView>
 
-        {/* Actions */}
+        {/* Actions — pinned below scroll area */}
         <View style={detailStyles.actions}>
           <Pressable
             style={[detailStyles.focusBtn, { backgroundColor: colors.tint }]}
@@ -573,7 +580,7 @@ function TaskDetailModal({
           </Pressable>
         </View>
 
-        {/* Pagination */}
+        {/* Pagination — pinned at bottom */}
         <View style={detailStyles.pagination}>
           <Pressable
             onPress={() => setIndex((i) => Math.max(0, i - 1))}
@@ -590,16 +597,35 @@ function TaskDetailModal({
             <Ionicons name="chevron-down" size={24} color={colors.text} />
           </Pressable>
         </View>
-        </ScrollView>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
+const SHEET_MAX_HEIGHT = Math.round(Dimensions.get('window').height * 0.82);
+
 const detailStyles = StyleSheet.create({
-  sheet: {
+  kavWrapper: {
     flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    maxHeight: SHEET_MAX_HEIGHT,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     paddingTop: Layout.spacing.md,
+    overflow: 'hidden',
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: Layout.spacing.sm,
+  },
+  scrollArea: {
+    flexShrink: 1,
   },
   scrollContent: {
     paddingBottom: Layout.spacing.sm,
@@ -764,7 +790,8 @@ const detailStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: Layout.spacing.xl,
-    paddingTop: Layout.spacing.xl,
+    paddingVertical: Layout.spacing.md,
+    paddingBottom: Layout.spacing.xl,
   },
   pageBtn: {
     width: 48,
