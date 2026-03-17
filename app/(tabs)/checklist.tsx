@@ -14,6 +14,7 @@ import {
   Keyboard,
   Animated as RNAnimated,
   Dimensions,
+  PanResponder,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -285,6 +286,32 @@ function TaskDetailModal({
   const [showSubtaskInput, setShowSubtaskInput] = useState(false);
   const subtaskInputRef = useRef<TextInput>(null);
 
+  const translateY = useRef(new RNAnimated.Value(0)).current;
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) translateY.setValue(gs.dy);
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 80 || gs.vy > 0.5) {
+          RNAnimated.timing(translateY, {
+            toValue: Dimensions.get('window').height,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(onClose);
+        } else {
+          RNAnimated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 4,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
   const current = entries[index];
 
   // Reset subtask input when navigating between entries
@@ -356,12 +383,14 @@ function TaskDetailModal({
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={detailStyles.backdrop} onPress={onClose} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={detailStyles.kavWrapper}
+        pointerEvents="box-none"
       >
-      <View style={[detailStyles.sheet, { backgroundColor: colors.background }]}>
-        <View style={[detailStyles.handle, { backgroundColor: colors.separator }]} />
+      <RNAnimated.View style={[detailStyles.sheet, { backgroundColor: colors.cardBackground, transform: [{ translateY }] }]}>
+        <View style={[detailStyles.handle, { backgroundColor: colors.separator }]} {...panResponder.panHandlers} />
         {/* Header */}
         <View style={detailStyles.header}>
           <Pressable onPress={onClose} hitSlop={8} style={detailStyles.closeBtn}>
@@ -597,7 +626,7 @@ function TaskDetailModal({
             <Ionicons name="chevron-down" size={24} color={colors.text} />
           </Pressable>
         </View>
-      </View>
+      </RNAnimated.View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -606,9 +635,15 @@ function TaskDetailModal({
 const SHEET_MAX_HEIGHT = Math.round(Dimensions.get('window').height * 0.82);
 
 const detailStyles = StyleSheet.create({
+  backdrop: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
   kavWrapper: {
     flex: 1,
     justifyContent: 'flex-end',
+    pointerEvents: 'box-none' as any,
   },
   sheet: {
     maxHeight: SHEET_MAX_HEIGHT,

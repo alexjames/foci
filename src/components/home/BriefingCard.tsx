@@ -733,7 +733,7 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: Layout.fontSize.title,
     fontWeight: '700',
-    marginBottom: Layout.spacing.sm,
+    marginBottom: Layout.spacing.lg,
   },
   sections: {
     gap: Layout.spacing.md,
