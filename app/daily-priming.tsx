@@ -26,6 +26,8 @@ import {
   EventsConfig,
   EventRecurrence,
   IdentitiesConfig,
+  PriorityUnit,
+  MilestoneStep,
 } from '@/src/types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -90,11 +92,54 @@ function formatEventDate(dateStr: string): string {
   return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
 }
 
+function formatDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function computePrimingProgress(
+  unit?: PriorityUnit,
+  numberValue?: number,
+  numberTarget?: number,
+  percentageValue?: number,
+  milestoneSteps?: MilestoneStep[]
+): string | null {
+  if (!unit) return null;
+  if (unit === 'percentage') {
+    const pct = percentageValue ?? 0;
+    return `${Math.round(pct)}%`;
+  }
+  if (unit === 'number') {
+    const val = numberValue ?? 0;
+    const target = numberTarget ?? 0;
+    return `${val} / ${target}`;
+  }
+  if (unit === 'milestone') {
+    const steps = milestoneSteps ?? [];
+    const done = steps.filter((s) => s.completed).length;
+    return `${done} / ${steps.length}`;
+  }
+  return null;
+}
+
+function getWeekPattern(completions: string[]): string {
+  const today = new Date();
+  const completionSet = new Set(completions);
+  const parts: string[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    parts.push(completionSet.has(formatDateKey(d)) ? 'X' : '-');
+  }
+  return parts.join(' ');
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type PrimingItem =
   | { kind: 'text'; value: string }
-  | { kind: 'two-line'; title: string; sub: string };
+  | { kind: 'two-line'; title: string; sub: string }
+  | { kind: 'progress-inline'; label: string; progress: string | null }
+  | { kind: 'habit-week'; title: string; pattern: string };
 
 interface PrimingScreenData {
   id: string;
@@ -160,10 +205,22 @@ function PrimingScreen({
           <Animated.View key={index} style={{ opacity: opacities[index] }}>
             {item.kind === 'text' ? (
               <Text style={[styles.itemText, { color: colors.text }]}>{item.value}</Text>
-            ) : (
+            ) : item.kind === 'two-line' ? (
               <View style={styles.twoLineItem}>
                 <Text style={[styles.itemText, { color: colors.text }]}>{item.title}</Text>
                 <Text style={[styles.itemSub, { color: colors.secondaryText }]}>{item.sub}</Text>
+              </View>
+            ) : item.kind === 'progress-inline' ? (
+              <View style={styles.progressInlineItem}>
+                <Text style={[styles.itemText, { color: colors.text, flex: 1 }]}>{item.label}</Text>
+                {item.progress && (
+                  <Text style={[styles.itemSub, { color: colors.secondaryText }]}>{item.progress}</Text>
+                )}
+              </View>
+            ) : (
+              <View style={styles.twoLineItem}>
+                <Text style={[styles.itemText, { color: colors.text }]}>{item.title}</Text>
+                <Text style={[styles.itemSub, { color: colors.secondaryText }]}>{item.pattern}</Text>
               </View>
             )}
           </Animated.View>
@@ -249,7 +306,11 @@ export default function DailyPrimingScreen() {
       result.push({
         id: 'goals',
         title: 'Your goals are',
-        items: goals.map((g) => ({ kind: 'text', value: `• ${g.name}` })),
+        items: goals.map((g) => ({
+          kind: 'progress-inline' as const,
+          label: g.name,
+          progress: computePrimingProgress(g.unit, g.numberValue, g.numberTarget, g.percentageValue, g.milestoneSteps),
+        })),
       });
     }
 
@@ -257,7 +318,11 @@ export default function DailyPrimingScreen() {
       result.push({
         id: 'priorities',
         title: 'Your current priorities are',
-        items: priorities.map((p, i) => ({ kind: 'text', value: `${i + 1}.  ${p.text}` })),
+        items: priorities.map((p, i) => ({
+          kind: 'progress-inline' as const,
+          label: `${i + 1}.  ${p.text}`,
+          progress: computePrimingProgress(p.unit, p.numberValue, p.numberTarget, p.percentageValue, p.milestoneSteps),
+        })),
       });
     }
 
@@ -276,7 +341,11 @@ export default function DailyPrimingScreen() {
       result.push({
         id: 'habits',
         title: "Habits you're working on",
-        items: habits.map((h) => ({ kind: 'text', value: `• ${h.title}` })),
+        items: habits.map((h) => ({
+          kind: 'habit-week' as const,
+          title: h.title,
+          pattern: getWeekPattern(h.completions),
+        })),
       });
     }
 
@@ -386,6 +455,11 @@ const styles = StyleSheet.create({
   },
   twoLineItem: {
     gap: 4,
+  },
+  progressInlineItem: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: Layout.spacing.md,
   },
   itemSub: {
     fontSize: Layout.fontSize.body,
