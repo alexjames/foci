@@ -322,6 +322,7 @@ export default function DailyPrimingScreen() {
   );
 
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
+  const isLastSlide = currentIndex === screens.length - 1;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -339,8 +340,13 @@ export default function DailyPrimingScreen() {
         showsHorizontalScrollIndicator={false}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
-        bounces={false}
+        bounces={isLastSlide}
         decelerationRate="fast"
+        onScrollEndDrag={(e) => {
+          if (isLastSlide && e.nativeEvent.velocity && e.nativeEvent.velocity.x > 0.3) {
+            router.back();
+          }
+        }}
       />
 
       {/* Close button */}
