@@ -5,9 +5,11 @@ import {
   Text,
   Pressable,
   Animated,
-  StatusBar,
+  ScrollView,
+  useColorScheme,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
@@ -29,7 +31,9 @@ interface PlayCard {
 }
 
 export function RoutinePlayView({ routineId, onComplete }: RoutinePlayViewProps) {
-  const colors = Colors['dark']; // always dark in play mode
+  const colorScheme = useColorScheme() ?? 'light';
+  const colors = Colors[colorScheme];
+  const insets = useSafeAreaInsets();
   const { config } = useToolConfig<RoutinesConfig>('routines');
 
   const routine = config?.routines.find((r) => r.id === routineId);
@@ -78,6 +82,8 @@ export function RoutinePlayView({ routineId, onComplete }: RoutinePlayViewProps)
 
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef<ScrollView>(null);
+  const cardYPositions = useRef<number[]>([]);
 
   const currentCard = playCards[currentIndex];
   const cardDuration = currentCard
@@ -121,24 +127,67 @@ export function RoutinePlayView({ routineId, onComplete }: RoutinePlayViewProps)
     return () => clearInterval(intervalRef.current);
   }, []);
 
-  const resetCard = useCallback(() => {
-    clearInterval(intervalRef.current);
-    setElapsed(0);
-    setMarkedDone(false);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Timer effect restarts automatically when markedDone → false
-  }, [setElapsed, setMarkedDone]);
+  // Auto-scroll to current card
+  useEffect(() => {
+    const y = cardYPositions.current[currentIndex];
+    if (y !== undefined && scrollRef.current) {
+      scrollRef.current.scrollTo({ y: Math.max(0, y - 8), animated: true });
+    }
+  }, [currentIndex]);
 
   const handlePausePlay = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsRunning((prev) => !prev);
   }, []);
 
+  const [completionToast, setCompletionToast] = useState(false);
+  const toastTranslateY = useRef(new Animated.Value(-80)).current;
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const toastShowing = useRef(false);
+
+  useEffect(() => {
+    if (completionToast && !toastShowing.current) {
+      toastShowing.current = true;
+      toastTranslateY.setValue(-80);
+      toastOpacity.setValue(0);
+      Animated.parallel([
+        Animated.spring(toastTranslateY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 10 }),
+        Animated.timing(toastOpacity, { toValue: 1, duration: 150, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [completionToast, toastTranslateY, toastOpacity]);
+
   const handleMarkDone = useCallback(() => {
     clearInterval(intervalRef.current);
     setMarkedDone(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [setMarkedDone]);
+
+    // Check if all steps will be done after marking this one
+    setMarkedDoneArr((arr) => {
+      const updated = [...arr];
+      updated[currentIndex] = true;
+
+      const allDone = updated.every((v) => v);
+      if (allDone) {
+        // Show toast and auto-exit after 3 seconds
+        setCompletionToast(true);
+        setTimeout(() => {
+          onComplete();
+        }, 3000);
+      } else {
+        // Move to next incomplete step
+        const nextIncomplete = updated.findIndex((v, i) => !v && i > currentIndex);
+        const target = nextIncomplete !== -1
+          ? nextIncomplete
+          : updated.findIndex((v) => !v);
+        if (target !== -1) {
+          setCurrentIndex(target);
+        }
+      }
+
+      return updated;
+    });
+  }, [currentIndex, onComplete, setMarkedDone]);
 
   const handlePrev = useCallback(() => {
     if (currentIndex > 0) {
@@ -175,14 +224,13 @@ export function RoutinePlayView({ routineId, onComplete }: RoutinePlayViewProps)
   // Completed screen
   if (isComplete) {
     return (
-      <View style={styles.fullScreenCentered}>
-        <StatusBar barStyle="light-content" />
+      <View style={[styles.completedScreen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <Ionicons name="checkmark-circle" size={80} color="#34C759" />
-        <Text style={styles.completeTitle}>Routine Complete</Text>
-        <Text style={styles.completeSubtitle}>
+        <Text style={[styles.completeTitle, { color: colors.text }]}>Routine Complete</Text>
+        <Text style={[styles.completeSubtitle, { color: colors.secondaryText }]}>
           Great job finishing your {routine?.title ?? ''} routine.
         </Text>
-        <Pressable onPress={handleDone} style={styles.doneButton}>
+        <Pressable onPress={handleDone} style={[styles.doneButton, { backgroundColor: colors.tint }]}>
           <Text style={styles.doneButtonText}>Done</Text>
         </Pressable>
       </View>
@@ -191,10 +239,9 @@ export function RoutinePlayView({ routineId, onComplete }: RoutinePlayViewProps)
 
   if (!currentCard) {
     return (
-      <View style={styles.fullScreenCentered}>
-        <StatusBar barStyle="light-content" />
-        <Text style={styles.completeTitle}>No cards in this routine.</Text>
-        <Pressable onPress={handleDone} style={styles.doneButton}>
+      <View style={[styles.completedScreen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+        <Text style={[styles.completeTitle, { color: colors.text }]}>No cards in this routine.</Text>
+        <Pressable onPress={handleDone} style={[styles.doneButton, { backgroundColor: colors.tint }]}>
           <Text style={styles.doneButtonText}>Back</Text>
         </Pressable>
       </View>
@@ -202,122 +249,173 @@ export function RoutinePlayView({ routineId, onComplete }: RoutinePlayViewProps)
   }
 
   return (
-    <View style={styles.fullScreen}>
-      <StatusBar barStyle="light-content" />
-
-      {/* Header: dots + close, near top with safe-area padding */}
-      <View style={styles.header}>
-        <View style={styles.dotRow}>
-          {playCards.map((_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.dot,
-                i === currentIndex && styles.dotActive,
-                markedDoneArr[i] && styles.dotDone,
-              ]}
-            />
-          ))}
-        </View>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Timer header */}
+      <View style={[styles.timerSection, { paddingTop: insets.top + 12 }]}>
         <Pressable onPress={onComplete} hitSlop={8} style={styles.closeBtn}>
-          <Ionicons name="close" size={20} color="#999" />
+          <Ionicons name="close" size={22} color={colors.secondaryText} />
         </Pressable>
+        <View style={styles.timerCenter}>
+          <Text style={[styles.timerText, { color: colors.tint }]}>{timeStr}</Text>
+          <Text style={[styles.stepCounter, { color: colors.secondaryText }]}>
+            Step {currentIndex + 1} of {totalCards}
+          </Text>
+        </View>
+        <View style={{ width: 32 }} />
       </View>
 
-      {/* Card content centered in remaining space */}
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle}>{currentCard.title}</Text>
-        <Text style={styles.cardDescription}>{currentCard.description}</Text>
-        <Text style={styles.timeRemaining}>{timeStr}</Text>
-      </View>
+      {/* Card list */}
+      <ScrollView
+        ref={scrollRef}
+        style={styles.cardList}
+        contentContainerStyle={[styles.cardListContent, { paddingBottom: 120 + insets.bottom }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {playCards.map((card, i) => {
+          const isCurrent = i === currentIndex;
+          const isDone = markedDoneArr[i];
+          const isFaded = !isCurrent && !isDone;
 
-      {/* Progress bar */}
-      <View style={styles.progressBarContainer}>
-        <Animated.View style={[styles.progressBar, { width: barWidth }]} />
-      </View>
+          const cardDurationI = routine?.cardDurations?.[card.id] ?? DEFAULT_DURATION;
+          const elapsedI = elapsedArr[i] ?? 0;
 
-      {/* Controls: Reset | Prev | Pause/Play | Next | Mark Done */}
-      <View style={styles.controls}>
-        <Pressable onPress={resetCard} style={styles.controlBtn}>
-          <Ionicons name="refresh" size={28} color="#999" />
-        </Pressable>
+          return (
+            <Pressable
+              key={card.id}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setCurrentIndex(i);
+              }}
+              onLayout={(e) => {
+                cardYPositions.current[i] = e.nativeEvent.layout.y;
+              }}
+              style={[
+                styles.stepCard,
+                { backgroundColor: colors.cardBackground },
+                isCurrent && { borderColor: colors.tint, borderWidth: 2 },
+                isDone && !isCurrent && { opacity: 0.55 },
+                isFaded && { opacity: 0.4 },
+              ]}
+            >
+              {/* Left indicator: check or step number */}
+              {isDone ? (
+                <Ionicons name="checkmark-circle" size={26} color="#34C759" />
+              ) : (
+                <View style={[styles.stepNumberCircle, { backgroundColor: isCurrent ? colors.tint + '22' : colors.separator }]}>
+                  <Text style={[styles.stepNumber, { color: isCurrent ? colors.tint : colors.secondaryText }]}>{i + 1}</Text>
+                </View>
+              )}
 
+              {/* Card content */}
+              <View style={styles.cardBody}>
+                <Text
+                  style={[
+                    styles.cardTitle,
+                    { color: isDone ? colors.secondaryText : colors.text },
+                    isDone && { textDecorationLine: 'line-through' },
+                  ]}
+                  numberOfLines={isCurrent ? undefined : 1}
+                >
+                  {card.title}
+                </Text>
+                {isCurrent && (
+                  <>
+                    <Text style={[styles.cardDescription, { color: colors.secondaryText }]}>
+                      {card.description}
+                    </Text>
+                    {!isDone && (
+                      <View style={[styles.cardProgressTrack, { backgroundColor: colors.separator }]}>
+                        <Animated.View style={[styles.cardProgressFill, { width: barWidth, backgroundColor: colors.tint }]} />
+                      </View>
+                    )}
+                  </>
+                )}
+                {!isCurrent && isDone && (
+                  <Text style={[styles.cardTimeLabel, { color: colors.secondaryText }]}>
+                    {formatDuration(elapsedI)} / {formatDuration(cardDurationI)}
+                  </Text>
+                )}
+              </View>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {/* Bottom controls */}
+      <View style={[styles.controlsBar, { backgroundColor: colors.cardBackground, borderTopColor: colors.separator, paddingBottom: Math.max(insets.bottom, 16) }]}>
+        {/* Center group: prev, play/pause, next */}
+        <View style={styles.controlsCenter}>
+          <Pressable
+            onPress={handlePrev}
+            disabled={currentIndex === 0}
+            style={[styles.controlBtn, currentIndex === 0 && styles.controlBtnDisabled]}
+          >
+            <Ionicons name="play-skip-back" size={26} color={colors.secondaryText} />
+          </Pressable>
+
+          <Pressable onPress={handlePausePlay} style={[styles.mainControlBtn, { backgroundColor: colors.tint }]}>
+            <Ionicons name={isRunning ? 'pause' : 'play'} size={30} color="#fff" />
+          </Pressable>
+
+          <Pressable onPress={handleNext} style={styles.controlBtn}>
+            <Ionicons name="play-skip-forward" size={26} color={colors.secondaryText} />
+          </Pressable>
+        </View>
+
+        {/* Right: mark done */}
         <Pressable
-          onPress={handlePrev}
-          style={[styles.controlBtn, currentIndex === 0 && styles.controlBtnDisabled]}
-          disabled={currentIndex === 0}
+          onPress={handleMarkDone}
+          disabled={markedDone}
+          style={[styles.controlBtn, styles.controlBtnRight, markedDone && styles.controlBtnDisabled]}
         >
-          <Ionicons name="play-skip-back" size={28} color={currentIndex === 0 ? '#444' : '#999'} />
+          <Ionicons
+            name={markedDone ? 'checkmark-circle' : 'checkmark-circle-outline'}
+            size={28}
+            color={markedDone ? '#34C759' : colors.tint}
+          />
         </Pressable>
-
-        <Pressable onPress={handlePausePlay} style={[styles.controlBtn, styles.mainControlBtn]}>
-          <Ionicons name={isRunning ? 'pause' : 'play'} size={32} color="#fff" />
-        </Pressable>
-
-        <Pressable onPress={handleNext} style={styles.controlBtn}>
-          <Ionicons name="play-skip-forward" size={28} color="#999" />
-        </Pressable>
-
-        {!markedDone ? (
-          <Pressable onPress={handleMarkDone} style={styles.controlBtn}>
-            <Ionicons name="checkmark-circle-outline" size={28} color="#999" />
-          </Pressable>
-        ) : (
-          <Pressable onPress={handleMarkDone} style={styles.controlBtn} disabled>
-            <Ionicons name="checkmark-circle" size={28} color="#34C759" />
-          </Pressable>
-        )}
       </View>
+
+      {/* Completion toast */}
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.toast, { transform: [{ translateY: toastTranslateY }], opacity: toastOpacity, backgroundColor: '#34C759' }]}
+      >
+        <Text style={styles.toastText}>{routine?.title ?? 'Routine'} completed!</Text>
+      </Animated.View>
     </View>
   );
 }
 
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 const styles = StyleSheet.create({
-  fullScreen: {
+  container: {
     flex: 1,
-    backgroundColor: '#000',
-    alignItems: 'center',
   },
-  fullScreenCentered: {
-    flex: 1,
-    backgroundColor: '#000',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Layout.spacing.xl,
-  },
-  header: {
+  // Timer header
+  timerSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: '100%',
-    gap: Layout.spacing.sm,
     paddingHorizontal: Layout.spacing.md,
-    paddingTop: 56,
     paddingBottom: Layout.spacing.md,
   },
-  dotRow: {
+  timerCenter: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#333',
+  timerText: {
+    fontSize: 42,
+    fontWeight: '300',
+    fontVariant: ['tabular-nums'],
   },
-  dotActive: {
-    backgroundColor: '#555',
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  dotDone: {
-    backgroundColor: '#34C759',
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  stepCounter: {
+    fontSize: Layout.fontSize.caption,
+    marginTop: 2,
   },
   closeBtn: {
     width: 32,
@@ -325,83 +423,120 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardContent: {
+  // Card list
+  cardList: {
+    flex: 1,
+  },
+  cardListContent: {
+    paddingHorizontal: Layout.spacing.md,
+    gap: Layout.spacing.sm,
+  },
+  stepCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+    gap: Layout.spacing.md,
+    borderWidth: 0,
+    borderColor: 'transparent',
+  },
+  stepNumberCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  stepNumber: {
+    fontSize: Layout.fontSize.caption,
+    fontWeight: '700',
+  },
+  cardBody: {
+    flex: 1,
+    gap: 4,
+  },
+  cardTitle: {
+    fontSize: Layout.fontSize.body,
+    fontWeight: '600',
+    lineHeight: 22,
+  },
+  cardDescription: {
+    fontSize: Layout.fontSize.caption,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  cardProgressTrack: {
+    height: 4,
+    borderRadius: 2,
+    marginTop: Layout.spacing.sm,
+    overflow: 'hidden',
+  },
+  cardProgressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  cardTimeLabel: {
+    fontSize: Layout.fontSize.caption - 1,
+    marginTop: 2,
+  },
+  // Controls bar
+  controlsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: Layout.spacing.md,
+    paddingHorizontal: Layout.spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  controlsCenter: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Layout.spacing.lg,
+  },
+  controlBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  controlBtnRight: {
+    position: 'absolute',
+    right: Layout.spacing.md,
+  },
+  controlBtnDisabled: {
+    opacity: 0.35,
+  },
+  mainControlBtn: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Completion screen
+  completedScreen: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Layout.spacing.xl,
   },
-  cardTitle: {
-    fontSize: Layout.fontSize.heading,
-    fontWeight: '700',
-    color: '#fff',
-    textAlign: 'center',
-    marginBottom: Layout.spacing.md,
-  },
-  cardDescription: {
-    fontSize: Layout.fontSize.body,
-    color: '#999',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: Layout.spacing.lg,
-  },
-  timeRemaining: {
-    fontSize: 48,
-    fontWeight: '200',
-    color: '#fff',
-    fontVariant: ['tabular-nums'],
-  },
-  progressBarContainer: {
-    width: '100%',
-    height: 6,
-    backgroundColor: '#222',
-    marginBottom: Layout.spacing.xxl,
-  },
-  progressBar: {
-    height: 6,
-    backgroundColor: '#0A84FF',
-    borderRadius: 3,
-  },
-  controls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Layout.spacing.md,
-    marginBottom: Layout.spacing.xxl,
-  },
-  controlBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  controlBtnDisabled: {
-    opacity: 0.4,
-  },
-  mainControlBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#333',
-  },
-  // Completed screen
   completeTitle: {
     fontSize: Layout.fontSize.heading,
     fontWeight: '700',
-    color: '#fff',
     marginTop: Layout.spacing.lg,
     textAlign: 'center',
   },
   completeSubtitle: {
     fontSize: Layout.fontSize.body,
-    color: '#999',
     textAlign: 'center',
     marginTop: Layout.spacing.sm,
     lineHeight: 22,
     paddingHorizontal: Layout.spacing.xl,
   },
   doneButton: {
-    backgroundColor: '#007AFF',
     paddingHorizontal: Layout.spacing.xxl,
     paddingVertical: Layout.spacing.md,
     borderRadius: Layout.borderRadius.lg,
@@ -413,5 +548,26 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: Layout.fontSize.title,
     fontWeight: '700',
+  },
+  toast: {
+    position: 'absolute',
+    top: 60,
+    left: 24,
+    right: 24,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    zIndex: 999,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  toastText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
