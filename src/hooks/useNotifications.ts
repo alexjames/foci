@@ -15,8 +15,8 @@ export function useNotificationListener() {
     responseListener.current =
       N.addNotificationResponseReceivedListener((response) => {
         const data = response.notification.request.content.data;
-        if (data?.screen === 'reveal') {
-          router.push('/reveal');
+        if (data?.screen === 'goals' || data?.screen === 'reveal') {
+          router.push('/tool/goals');
         }
       });
 
@@ -30,8 +30,9 @@ export function useNotificationListener() {
   // Handle notification tap that launched the app (cold start)
   const lastResponse = getNotifications().useLastNotificationResponse();
   useEffect(() => {
-    if (lastResponse?.notification.request.content.data?.screen === 'reveal') {
-      router.push('/reveal');
+    const screen = lastResponse?.notification.request.content.data?.screen;
+    if (screen === 'goals' || screen === 'reveal') {
+      router.push('/tool/goals');
     }
   }, [lastResponse, router]);
 }

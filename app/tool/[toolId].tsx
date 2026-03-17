@@ -198,13 +198,6 @@ function GoalsView() {
         contentContainerStyle={styles.goalsScrollContent}
         activationDistance={1}
       />
-      {goals.length > 0 && (
-        <View style={styles.goalsFabRow} pointerEvents="box-none">
-          <Pressable onPress={() => router.push('/reveal')} style={[styles.goalsFab, { backgroundColor: colors.tint }]}>
-            <Ionicons name="play" size={26} color="#fff" />
-          </Pressable>
-        </View>
-      )}
     </View>
   );
 }
@@ -435,26 +428,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-  },
-  goalsFabRow: {
-    position: 'absolute',
-    bottom: Layout.spacing.xl,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  goalsFab: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
   },
 });

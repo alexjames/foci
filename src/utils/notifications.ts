@@ -37,7 +37,7 @@ export async function scheduleDailyNotification(
     content: {
       title: 'Foci',
       body: 'Time to review your goals.',
-      data: { screen: 'reveal' },
+      data: { screen: 'goals' },
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DAILY,

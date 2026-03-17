@@ -8,7 +8,7 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     tagline: 'Track what matters',
     icon: 'flag-outline',
     description:
-      'Define up to 5 meaningful goals with outcomes, reasons, and consequences. Review them daily with an immersive reveal.',
+      'Define up to 5 meaningful goals with outcomes, reasons, and consequences.',
   },
   {
     id: 'priorities',
