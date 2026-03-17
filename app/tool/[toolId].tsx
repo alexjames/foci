@@ -45,6 +45,34 @@ import { EventsList, SortMode as EventSortMode } from '@/src/components/events/E
 // Priorities import
 import { PrioritiesView } from '@/src/components/priorities/PrioritiesView';
 
+function computeGoalProgress(g: Goal): { fraction: number; label: string } | null {
+  if (!g.unit) return null;
+  if (g.unit === 'percentage') {
+    const v = g.percentageValue ?? 0;
+    return { fraction: v / 100, label: `${v}%` };
+  }
+  if (g.unit === 'number') {
+    const v = g.numberValue ?? 0;
+    const t = g.numberTarget ?? 1;
+    return { fraction: Math.min(t > 0 ? v / t : 0, 1), label: `${v} / ${t}` };
+  }
+  if (g.unit === 'milestone') {
+    const steps = g.milestoneSteps ?? [];
+    const done = steps.filter((s) => s.completed).length;
+    return { fraction: steps.length ? done / steps.length : 0, label: `${done} / ${steps.length}` };
+  }
+  return null;
+}
+
+function formatGoalDate(isoString: string | undefined): string | null {
+  if (!isoString) return null;
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return null;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `By ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
 function getGoalColor(colorId: string | undefined, scheme: 'light' | 'dark'): string {
   const found = DEADLINE_COLORS.find((c) => c.id === colorId);
   if (found) return scheme === 'dark' ? found.dark : found.light;
@@ -110,9 +138,25 @@ function SwipeableGoalCard({
           >
             <View style={styles.goalInfo}>
               <Text style={[styles.goalName, { color: colors.text }]}>{goal.name}</Text>
-              {goal.outcome ? (
-                <Text style={[styles.goalSubtext, { color: colors.secondaryText }]} numberOfLines={1}>{goal.outcome}</Text>
-              ) : null}
+              {(() => {
+                const progress = computeGoalProgress(goal);
+                if (!progress) return null;
+                return (
+                  <View style={styles.goalProgressRow}>
+                    <View style={styles.goalProgressTrack}>
+                      <View style={[styles.goalProgressFill, { width: `${Math.round(progress.fraction * 100)}%` as any, backgroundColor: accentColor }]} />
+                    </View>
+                    <Text style={[styles.goalProgressLabel, { color: accentColor }]}>{progress.label}</Text>
+                  </View>
+                );
+              })()}
+              {(() => {
+                const dateLabel = formatGoalDate(goal.dueDate);
+                if (!dateLabel) return null;
+                return (
+                  <Text style={[styles.goalSubtext, { color: colors.secondaryText }]} numberOfLines={1}>{dateLabel}</Text>
+                );
+              })()}
             </View>
             {showHandle && (
               <Ionicons name="reorder-three-outline" size={20} color={colors.secondaryText} style={{ opacity: 0.4 }} />
@@ -397,6 +441,29 @@ const styles = StyleSheet.create({
   },
   goalInfo: { flex: 1 },
   goalName: { fontSize: Layout.fontSize.body, fontWeight: '600' },
+  goalProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.sm,
+    marginTop: Layout.spacing.xs,
+  },
+  goalProgressTrack: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    overflow: 'hidden',
+  },
+  goalProgressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  goalProgressLabel: {
+    fontSize: Layout.fontSize.caption,
+    fontWeight: '600',
+    minWidth: 48,
+    textAlign: 'right',
+  },
   goalSubtext: { fontSize: Layout.fontSize.caption, marginTop: 2 },
   maxGoalsMessage: {
     flexDirection: 'row',

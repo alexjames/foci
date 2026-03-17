@@ -13,77 +13,21 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import Svg, { Path } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, View } from '@/components/Themed';
 import { useGoals } from '@/src/hooks/useGoals';
 import { Colors } from '@/src/constants/Colors';
 import { Layout } from '@/src/constants/Layout';
 import { DEADLINE_COLORS } from '@/src/constants/tools';
+import { PriorityUnit, MilestoneStep } from '@/src/types';
 
-type Point = { x: number; y: number };
+const MAX_CHARS = 160;
 
-function SignaturePreview({
-  signature,
-  onClear,
-  colors,
-}: {
-  signature: string;
-  onClear: () => void;
-  colors: typeof Colors.light;
-}) {
-  let paths: Point[][] = [];
-  let viewBox = '0 0 300 220';
-  try {
-    const parsed = JSON.parse(signature);
-    paths = parsed.paths ?? [];
-    if (parsed.viewBox) viewBox = parsed.viewBox;
-  } catch {
-    return null;
-  }
-
-  function pointsToSvgPath(pts: Point[]): string {
-    if (pts.length < 2) return '';
-    let d = `M ${pts[0].x} ${pts[0].y}`;
-    for (let i = 1; i < pts.length - 1; i++) {
-      const mx = (pts[i].x + pts[i + 1].x) / 2;
-      const my = (pts[i].y + pts[i + 1].y) / 2;
-      d += ` Q ${pts[i].x} ${pts[i].y} ${mx} ${my}`;
-    }
-    d += ` L ${pts[pts.length - 1].x} ${pts[pts.length - 1].y}`;
-    return d;
-  }
-
-  return (
-    <RNView>
-      <RNView
-        style={[
-          styles.sigPreview,
-          { borderColor: colors.cardBorder, backgroundColor: colors.cardBackground },
-        ]}
-      >
-        <Svg width="100%" height="100%" viewBox={viewBox} preserveAspectRatio="xMidYMid meet">
-          {paths.filter((p) => p.length >= 2).map((pts, i) => (
-            <Path
-              key={i}
-              d={pointsToSvgPath(pts)}
-              stroke={colors.text}
-              strokeWidth={2.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-          ))}
-        </Svg>
-      </RNView>
-      <Pressable onPress={onClear} hitSlop={8} style={styles.clearSigBtn}>
-        <Text style={[styles.clearSigText, { color: colors.destructive }]}>
-          Clear Signature
-        </Text>
-      </Pressable>
-    </RNView>
-  );
-}
+const UNIT_OPTIONS: { value: PriorityUnit; label: string }[] = [
+  { value: 'milestone', label: 'Milestones' },
+  { value: 'number', label: 'Number' },
+  { value: 'percentage', label: 'Percentage' },
+];
 
 export default function EditGoalScreen() {
   const router = useRouter();
@@ -95,16 +39,21 @@ export default function EditGoalScreen() {
   const existingGoal = goals.find((g) => g.id === id);
 
   const [name, setName] = useState(existingGoal?.name ?? '');
-  const [outcome, setOutcome] = useState(existingGoal?.outcome ?? '');
-  const [why, setWhy] = useState(existingGoal?.why ?? '');
-  const [consequences, setConsequences] = useState(existingGoal?.consequences ?? '');
-  const [measurement, setMeasurement] = useState(existingGoal?.measurement ?? '');
   const [dueDate, setDueDate] = useState<Date>(
     existingGoal?.dueDate ? new Date(existingGoal.dueDate) : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
   );
   const [color, setColor] = useState<string | undefined>(existingGoal?.color);
-  const [signature, setSignature] = useState<string | undefined>(existingGoal?.signature);
   const [showDatePicker, setShowDatePicker] = useState(Platform.OS === 'ios');
+
+  // Progress tracking state
+  const [unit, setUnit] = useState<PriorityUnit>(existingGoal?.unit ?? 'milestone');
+  const [numberValue, setNumberValue] = useState(String(existingGoal?.numberValue ?? 0));
+  const [numberTarget, setNumberTarget] = useState(String(existingGoal?.numberTarget ?? 10));
+  const [percentageValue, setPercentageValue] = useState(String(existingGoal?.percentageValue ?? 0));
+  const [milestoneSteps, setMilestoneSteps] = useState<MilestoneStep[]>(existingGoal?.milestoneSteps ?? []);
+  const [newStepText, setNewStepText] = useState('');
+
+  const remaining = MAX_CHARS - name.length;
 
   const formatDate = (d: Date) => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -115,16 +64,32 @@ export default function EditGoalScreen() {
 
   const handleSave = () => {
     if (!name.trim() || !existingGoal) return;
-    updateGoal(existingGoal.id, {
+
+    const updates: Parameters<typeof updateGoal>[1] = {
       name: name.trim(),
       color,
-      outcome: outcome.trim() || undefined,
-      why: why.trim() || undefined,
-      consequences: consequences.trim() || undefined,
-      measurement: measurement.trim() || undefined,
       dueDate: dueDate.toISOString(),
-      signature,
-    });
+      unit,
+    };
+
+    if (unit === 'number') {
+      updates.numberValue = Math.max(0, parseInt(numberValue) || 0);
+      updates.numberTarget = Math.max(1, parseInt(numberTarget) || 1);
+      updates.percentageValue = undefined;
+      updates.milestoneSteps = undefined;
+    } else if (unit === 'percentage') {
+      updates.percentageValue = Math.min(100, Math.max(0, parseInt(percentageValue) || 0));
+      updates.numberValue = undefined;
+      updates.numberTarget = undefined;
+      updates.milestoneSteps = undefined;
+    } else if (unit === 'milestone') {
+      updates.milestoneSteps = milestoneSteps;
+      updates.numberValue = undefined;
+      updates.numberTarget = undefined;
+      updates.percentageValue = undefined;
+    }
+
+    updateGoal(existingGoal.id, updates);
     router.back();
   };
 
@@ -144,6 +109,23 @@ export default function EditGoalScreen() {
           },
         },
       ]
+    );
+  };
+
+  const addStep = () => {
+    const label = newStepText.trim();
+    if (!label) return;
+    setMilestoneSteps((prev) => [...prev, { id: `step-${Date.now()}`, label, completed: false }]);
+    setNewStepText('');
+  };
+
+  const removeStep = (stepId: string) => {
+    setMilestoneSteps((prev) => prev.filter((s) => s.id !== stepId));
+  };
+
+  const toggleStep = (stepId: string) => {
+    setMilestoneSteps((prev) =>
+      prev.map((s) => s.id === stepId ? { ...s, completed: !s.completed } : s)
     );
   };
 
@@ -186,19 +168,25 @@ export default function EditGoalScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Goal Text */}
           <View style={styles.fieldContainer}>
             <Text style={[styles.label, { color: colors.text }]}>
-              Goal Name <Text style={{ color: colors.destructive }}>*</Text>
+              I will... <Text style={{ color: colors.destructive }}>*</Text>
             </Text>
             <TextInput
               style={inputStyle()}
               value={name}
-              onChangeText={setName}
-              placeholder="e.g., Run a marathon"
+              onChangeText={(t) => setName(t.slice(0, MAX_CHARS))}
+              placeholder="e.g., run a marathon in under 5 hours"
               placeholderTextColor={colors.placeholder}
+              maxLength={MAX_CHARS}
             />
+            <Text style={[styles.charCount, { color: remaining <= 20 ? colors.destructive : colors.secondaryText }]}>
+              {remaining} characters remaining
+            </Text>
           </View>
 
+          {/* Color */}
           <View style={styles.fieldContainer}>
             <Text style={[styles.label, { color: colors.text }]}>Color</Text>
             <RNView style={styles.colorRow}>
@@ -224,19 +212,7 @@ export default function EditGoalScreen() {
             </RNView>
           </View>
 
-          <View style={styles.fieldContainer}>
-            <Text style={[styles.label, { color: colors.text }]}>Specific Outcome</Text>
-            <TextInput
-              style={inputStyle(styles.multiline)}
-              value={outcome}
-              onChangeText={setOutcome}
-              placeholder="What does achieving this look like?"
-              placeholderTextColor={colors.placeholder}
-              multiline
-              textAlignVertical="top"
-            />
-          </View>
-
+          {/* Target Date */}
           <View style={styles.fieldContainer}>
             <Text style={[styles.label, { color: colors.text }]}>Target Date</Text>
             {Platform.OS === 'android' && (
@@ -264,55 +240,127 @@ export default function EditGoalScreen() {
             )}
           </View>
 
+          {/* Progress Tracking */}
           <View style={styles.fieldContainer}>
-            <Text style={[styles.label, { color: colors.text }]}>Why</Text>
-            <TextInput
-              style={inputStyle(styles.multiline)}
-              value={why}
-              onChangeText={setWhy}
-              placeholder="Why is this important to you?"
-              placeholderTextColor={colors.placeholder}
-              multiline
-              textAlignVertical="top"
-            />
-          </View>
+            <Text style={[styles.label, { color: colors.text }]}>Progress Tracking</Text>
+            <RNView style={styles.unitPickerRow}>
+              {UNIT_OPTIONS.map((opt) => {
+                const selected = unit === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    onPress={() => setUnit(opt.value)}
+                    style={[
+                      styles.unitChip,
+                      {
+                        backgroundColor: selected ? colors.tint + '22' : colors.inputBackground,
+                        borderColor: selected ? colors.tint : colors.inputBorder,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.unitChipText,
+                        { color: selected ? colors.tint : colors.secondaryText, fontWeight: selected ? '600' : '400' },
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </RNView>
 
-          <View style={styles.fieldContainer}>
-            <Text style={[styles.label, { color: colors.text }]}>Consequences</Text>
-            <TextInput
-              style={inputStyle(styles.multiline)}
-              value={consequences}
-              onChangeText={setConsequences}
-              placeholder="What happens if you don't achieve this?"
-              placeholderTextColor={colors.placeholder}
-              multiline
-              textAlignVertical="top"
-            />
-          </View>
+            {/* Number fields */}
+            {unit === 'number' && (
+              <RNView style={styles.progressInputSection}>
+                <RNView style={styles.numberFieldRow}>
+                  <RNView style={{ flex: 1 }}>
+                    <Text style={[styles.fieldLabel, { color: colors.secondaryText }]}>Current</Text>
+                    <TextInput
+                      style={[styles.numberField, { color: colors.text, borderColor: colors.inputBorder, backgroundColor: colors.inputBackground }]}
+                      value={numberValue}
+                      onChangeText={setNumberValue}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor={colors.secondaryText}
+                    />
+                  </RNView>
+                  <RNView style={{ flex: 1 }}>
+                    <Text style={[styles.fieldLabel, { color: colors.secondaryText }]}>Target</Text>
+                    <TextInput
+                      style={[styles.numberField, { color: colors.text, borderColor: colors.inputBorder, backgroundColor: colors.inputBackground }]}
+                      value={numberTarget}
+                      onChangeText={setNumberTarget}
+                      keyboardType="numeric"
+                      placeholder="10"
+                      placeholderTextColor={colors.secondaryText}
+                    />
+                  </RNView>
+                </RNView>
+              </RNView>
+            )}
 
-          <View style={styles.fieldContainer}>
-            <Text style={[styles.label, { color: colors.text }]}>Measurement</Text>
-            <TextInput
-              style={inputStyle(styles.multiline)}
-              value={measurement}
-              onChangeText={setMeasurement}
-              placeholder="How will you track progress?"
-              placeholderTextColor={colors.placeholder}
-              multiline
-              textAlignVertical="top"
-            />
-          </View>
+            {/* Percentage field */}
+            {unit === 'percentage' && (
+              <RNView style={styles.progressInputSection}>
+                <Text style={[styles.fieldLabel, { color: colors.secondaryText }]}>Current Progress (%)</Text>
+                <TextInput
+                  style={[styles.numberField, { color: colors.text, borderColor: colors.inputBorder, backgroundColor: colors.inputBackground }]}
+                  value={percentageValue}
+                  onChangeText={setPercentageValue}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor={colors.secondaryText}
+                />
+              </RNView>
+            )}
 
-          {signature ? (
-            <View style={styles.fieldContainer}>
-              <Text style={[styles.label, { color: colors.text }]}>Commitment Signature</Text>
-              <SignaturePreview
-                signature={signature}
-                onClear={() => setSignature(undefined)}
-                colors={colors}
-              />
-            </View>
-          ) : null}
+            {/* Milestone steps */}
+            {unit === 'milestone' && (
+              <RNView style={styles.progressInputSection}>
+                <Text style={[styles.fieldLabel, { color: colors.secondaryText }]}>Steps</Text>
+                {milestoneSteps.map((step, i) => (
+                  <RNView key={step.id} style={styles.stepRow}>
+                    <Pressable onPress={() => toggleStep(step.id)} hitSlop={4}>
+                      <Ionicons
+                        name={step.completed ? 'checkbox' : 'square-outline'}
+                        size={20}
+                        color={step.completed ? colors.tint : colors.secondaryText}
+                      />
+                    </Pressable>
+                    <Text
+                      style={[
+                        styles.stepLabel,
+                        { color: colors.text },
+                        step.completed && styles.stepCompleted,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {step.label}
+                    </Text>
+                    <Pressable onPress={() => removeStep(step.id)} hitSlop={8}>
+                      <Ionicons name="close-circle-outline" size={18} color={colors.secondaryText} />
+                    </Pressable>
+                  </RNView>
+                ))}
+                <RNView style={styles.addStepRow}>
+                  <TextInput
+                    style={[styles.addStepInput, { color: colors.text, borderColor: colors.inputBorder, backgroundColor: colors.inputBackground }]}
+                    value={newStepText}
+                    onChangeText={setNewStepText}
+                    placeholder="Add a step..."
+                    placeholderTextColor={colors.secondaryText}
+                    onSubmitEditing={addStep}
+                    returnKeyType="done"
+                  />
+                  <Pressable onPress={addStep} style={[styles.addStepBtn, { backgroundColor: colors.tint }]}>
+                    <Ionicons name="add" size={18} color="#fff" />
+                  </Pressable>
+                </RNView>
+              </RNView>
+            )}
+          </View>
 
           {existingGoal && (
             <Pressable
@@ -357,7 +405,11 @@ const styles = StyleSheet.create({
     padding: Layout.spacing.md,
     fontSize: Layout.fontSize.body,
   },
-  multiline: { minHeight: 80, paddingTop: Layout.spacing.md },
+  charCount: {
+    fontSize: Layout.fontSize.caption,
+    textAlign: 'right',
+    marginTop: Layout.spacing.xs,
+  },
   dateButton: {
     padding: Layout.spacing.md,
     borderRadius: Layout.borderRadius.sm,
@@ -366,15 +418,6 @@ const styles = StyleSheet.create({
   },
   dateButtonText: { fontSize: Layout.fontSize.body, fontWeight: '500' },
   dateLabel: { fontSize: Layout.fontSize.caption, marginTop: Layout.spacing.xs },
-  sigPreview: {
-    borderRadius: Layout.borderRadius.md,
-    borderWidth: 1,
-    overflow: 'hidden',
-    aspectRatio: 300 / 220,
-    width: '100%',
-  },
-  clearSigBtn: { alignSelf: 'center', marginTop: Layout.spacing.sm },
-  clearSigText: { fontSize: Layout.fontSize.body, fontWeight: '500' },
   colorRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -384,6 +427,76 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Progress tracking
+  unitPickerRow: {
+    flexDirection: 'row',
+    gap: Layout.spacing.sm,
+    marginBottom: Layout.spacing.md,
+    flexWrap: 'wrap',
+  },
+  unitChip: {
+    paddingHorizontal: Layout.spacing.md,
+    paddingVertical: Layout.spacing.sm,
+    borderRadius: 99,
+    borderWidth: 1.5,
+  },
+  unitChipText: {
+    fontSize: Layout.fontSize.caption,
+  },
+  progressInputSection: {
+    gap: Layout.spacing.sm,
+  },
+  fieldLabel: {
+    fontSize: Layout.fontSize.caption,
+    fontWeight: '600',
+    marginBottom: Layout.spacing.xs,
+    letterSpacing: 0.3,
+  },
+  numberFieldRow: {
+    flexDirection: 'row',
+    gap: Layout.spacing.md,
+  },
+  numberField: {
+    fontSize: Layout.fontSize.body,
+    padding: Layout.spacing.sm,
+    borderRadius: Layout.borderRadius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    textAlign: 'center',
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Layout.spacing.sm,
+    paddingVertical: Layout.spacing.xs,
+  },
+  stepLabel: {
+    flex: 1,
+    fontSize: Layout.fontSize.body,
+  },
+  stepCompleted: {
+    textDecorationLine: 'line-through',
+    opacity: 0.5,
+  },
+  addStepRow: {
+    flexDirection: 'row',
+    gap: Layout.spacing.sm,
+    alignItems: 'center',
+    marginTop: Layout.spacing.xs,
+  },
+  addStepInput: {
+    flex: 1,
+    fontSize: Layout.fontSize.body,
+    padding: Layout.spacing.sm,
+    borderRadius: Layout.borderRadius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  addStepBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
