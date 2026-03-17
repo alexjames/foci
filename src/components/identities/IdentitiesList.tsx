@@ -133,6 +133,7 @@ export function IdentitiesList() {
   }, [config, identities, setConfig]);
 
   return (
+    <View style={styles.container}>
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
 
       {identities.length === 0 && (
@@ -140,7 +141,7 @@ export function IdentitiesList() {
           <Ionicons name="person-outline" size={48} color={colors.secondaryText} style={{ opacity: 0.4, marginBottom: Layout.spacing.md }} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>No Identities Yet</Text>
           <Text style={[styles.emptyHint, { color: colors.secondaryText }]}>
-            Tap the button below to define who you are.
+            Tap the + button to define who you are.
           </Text>
         </View>
       )}
@@ -178,15 +179,6 @@ export function IdentitiesList() {
           </Swipeable>
       ))}
 
-      {identities.length < MAX_IDENTITIES && (
-        <Pressable
-          onPress={() => setIdentityModal({})}
-          style={[styles.addIdentityBtn, { borderColor: colors.tint, backgroundColor: colors.tint + '10' }]}
-        >
-          <Ionicons name="add" size={20} color={colors.tint} />
-          <Text style={[styles.addIdentityBtnText, { color: colors.tint }]}>Add Identity</Text>
-        </Pressable>
-      )}
       {identities.length >= MAX_IDENTITIES && (
         <Text style={[styles.maxHint, { color: colors.secondaryText, textAlign: 'center', marginTop: Layout.spacing.md }]}>
           Maximum {MAX_IDENTITIES} identities reached.
@@ -208,6 +200,14 @@ export function IdentitiesList() {
         onClose={() => setIdentityModal(null)}
       />
     </ScrollView>
+    {identities.length < MAX_IDENTITIES && (
+      <View style={styles.fabContainer}>
+        <Pressable onPress={() => setIdentityModal({})} style={styles.fab}>
+          <Ionicons name="add" size={28} color="#fff" />
+        </Pressable>
+      </View>
+    )}
+    </View>
   );
 }
 
@@ -273,20 +273,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: Layout.spacing.md,
     paddingTop: Layout.spacing.sm,
   },
-  addIdentityBtn: {
-    flexDirection: 'row',
+  fabContainer: {
+    position: 'absolute',
+    bottom: Layout.spacing.xl,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  fab: {
+    backgroundColor: '#007AFF',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Layout.spacing.sm,
-    marginHorizontal: Layout.spacing.md,
-    marginTop: Layout.spacing.md,
-    paddingVertical: Layout.spacing.md,
-    borderRadius: Layout.borderRadius.md,
-    borderWidth: 1,
-  },
-  addIdentityBtnText: {
-    fontSize: Layout.fontSize.body,
-    fontWeight: '600',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   modalBackdrop: {
     position: 'absolute',

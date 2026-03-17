@@ -198,35 +198,26 @@ function GoalsView() {
     [handleDelete, isDragging, router]
   );
 
-  const ListFooter = (
-    <View>
-      {canAddGoal && (
-        <View style={styles.goalsAddRow}>
-          <Pressable onPress={() => router.push('/new-goal')} style={[styles.goalsAddButton, { borderColor: colors.cardBorder }]}>
-            <Ionicons name="add" size={20} color={colors.secondaryText} />
-          </Pressable>
-        </View>
-      )}
-      {!canAddGoal && (
-        <View style={[styles.maxGoalsMessage, { backgroundColor: colors.cardBackground }]}>
-          <Ionicons name="information-circle-outline" size={20} color={colors.secondaryText} />
-          <Text style={[styles.maxGoalsText, { color: colors.secondaryText }]}>
-            Avoid setting too many goals at once. Research shows that the brain functions best when focused on 4 or fewer goals at any given point in time.
-          </Text>
-        </View>
-      )}
+  const ListFooter = !canAddGoal ? (
+    <View style={[styles.maxGoalsMessage, { backgroundColor: colors.cardBackground }]}>
+      <Ionicons name="information-circle-outline" size={20} color={colors.secondaryText} />
+      <Text style={[styles.maxGoalsText, { color: colors.secondaryText }]}>
+        Avoid setting too many goals at once. Research shows that the brain functions best when focused on 4 or fewer goals at any given point in time.
+      </Text>
     </View>
-  );
+  ) : null;
 
   if (goals.length === 0) {
     return (
       <View style={{ flex: 1 }}>
         <EmptyState title="No Goals Yet" message="Tap the + button to add your first goal." />
-        <View style={styles.goalsAddRow}>
-          <Pressable onPress={() => router.push('/new-goal')} style={[styles.goalsAddButton, { borderColor: colors.cardBorder }]}>
-            <Ionicons name="add" size={20} color={colors.secondaryText} />
-          </Pressable>
-        </View>
+        {canAddGoal && (
+          <View style={styles.fabContainer}>
+            <Pressable onPress={() => router.push('/new-goal')} style={styles.fab}>
+              <Ionicons name="add" size={28} color="#fff" />
+            </Pressable>
+          </View>
+        )}
       </View>
     );
   }
@@ -242,6 +233,13 @@ function GoalsView() {
         contentContainerStyle={styles.goalsScrollContent}
         activationDistance={1}
       />
+      {canAddGoal && (
+        <View style={styles.fabContainer}>
+          <Pressable onPress={() => router.push('/new-goal')} style={styles.fab}>
+            <Ionicons name="add" size={28} color="#fff" />
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
@@ -484,16 +482,24 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
     flexGrow: 1,
   },
-  goalsAddRow: {
+  fabContainer: {
+    position: 'absolute',
+    bottom: Layout.spacing.xl,
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    paddingVertical: Layout.spacing.md,
   },
-  goalsAddButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  fab: {
+    backgroundColor: '#007AFF',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
 });
